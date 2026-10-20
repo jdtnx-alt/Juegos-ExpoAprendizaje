@@ -1,0 +1,10 @@
+.git
+.gitignore
+.dockerignore
+Dockerfile
+docker-compose.yml
+nginx.conf
+deploy.sh
+*.md
+.DS_Store
+Thumbs.db
