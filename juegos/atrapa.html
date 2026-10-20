@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Atrapa Objetos - Retro Arcade</title>
+  <link rel="stylesheet" href="../css/estilos.css">
+  <link rel="stylesheet" href="../css/movil.css">
+  <style>
+    .atrapa-canvas-wrap {
+      width: min(94vw, 680px);
+      aspect-ratio: 4 / 3;
+      max-height: calc(100vh - 200px);
+      position: relative;
+      background: #000;
+      border: 4px solid var(--neon-yellow);
+      box-shadow: 0 0 25px var(--neon-yellow-glow);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    #atrapa-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+    }
+
+    .lives-icons {
+      display: inline-flex;
+      gap: 4px;
+      vertical-align: middle;
+    }
+    .heart-icon {
+      width: 14px;
+      height: 14px;
+      fill: var(--neon-magenta);
+      filter: drop-shadow(0 0 4px var(--neon-magenta-glow));
+    }
+    .heart-icon.lost {
+      opacity: 0.2;
+      filter: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="crt-overlay" aria-hidden="true"></div>
+
+  <header class="top-controls">
+    <button type="button" class="btn-icon-arcade" id="btn-toggle-sonido" title="Sonido">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+    </button>
+  </header>
+
+  <main class="game-container">
+    <div class="game-top-bar">
+      <button type="button" class="btn-arcade btn-arcade-cyan" id="btn-back-menu" style="padding: 8px 14px; font-size: 0.65rem;">
+        &lt; MENÚ
+      </button>
+
+      <div class="game-stats">
+        <div class="stat-item">PUNTOS: <span id="stat-puntos" style="color: var(--neon-yellow);">0</span></div>
+        <div class="stat-item">VIDAS: <span id="stat-vidas" class="lives-icons"></span></div>
+        <div class="stat-item">RÉCORD: <span id="stat-record" style="color: var(--neon-green);">0</span></div>
+      </div>
+    </div>
+
+    <div class="arcade-screen" style="padding: 10px;">
+      <!-- Overlay de Inicio -->
+      <div class="game-start-overlay" id="overlay-start">
+        <div class="start-icon" style="margin-bottom: 8px;">
+          <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
+            <rect x="10" y="24" width="44" height="28" rx="4" fill="#2a1f05" stroke="#ffe600" stroke-width="4"/>
+            <path d="M18 24 C18 12, 46 12, 46 24" stroke="#ffe600" stroke-width="4" fill="none"/>
+            <line x1="16" y1="34" x2="48" y2="34" stroke="#ffe600" stroke-width="2"/>
+            <line x1="16" y1="42" x2="48" y2="42" stroke="#ffe600" stroke-width="2"/>
+            <line x1="26" y1="24" x2="26" y2="52" stroke="#ffe600" stroke-width="2"/>
+            <line x1="38" y1="24" x2="38" y2="52" stroke="#ffe600" stroke-width="2"/>
+          </svg>
+        </div>
+        <h1 class="game-title-big">ATRAPA OBJETOS</h1>
+        <p class="game-instructions">
+          MUEVE LA CANASTA (RATÓN, TOQUE O FLECHAS &lt; &gt;). ¡RECOGE FRUTAS VIVAS (+10) Y ESQUIVA LAS BOMBAS NEGRAS!
+        </p>
+        <button type="button" class="btn-arcade btn-arcade-green blink-text" id="btn-start-atrapa" style="margin-top: 10px;">
+          > START
+        </button>
+      </div>
+
+      <div class="atrapa-canvas-wrap">
+        <canvas id="atrapa-canvas" width="700" height="520"></canvas>
+      </div>
+    </div>
+  </main>
+
+  <script src="../js/sonidos.js"></script>
+  <script src="../js/transiciones.js"></script>
+  <script src="../js/movil.js"></script>
+
+  <script>
+    /* ==========================================================================
+       CONSTANTES CONFIGURABLES DE EQUILIBRIO DE JUEGO (ATRAPA OBJETOS)
+       ========================================================================== */
+    const VELOCIDAD_CAIDA_INICIAL = 1.8;       // Menos de la mitad de la velocidad original (4.2)
+    const VELOCIDAD_CAIDA_MAXIMA = 5.2;        // Límite máximo para que siempre se pueda jugar
+    const PUNTOS_POR_AUMENTO_VELOCIDAD = 50;   // Aumento gradual cada 50 puntos
+    const INCREMENTO_VELOCIDAD = 0.20;         // Cantidad suave que sube la velocidad
+    const INTERVALO_APARICION_INICIAL = 68;    // Frames entre objetos al inicio (frecuencia reducida)
+    const INTERVALO_APARICION_MINIMO = 36;     // Frecuencia máxima a puntajes altos
+    const PROBABILIDAD_BOMBA = 0.26;           // 26% de probabilidad de bomba
+    const VIDAS_INICIALES = 3;                 // Vidas del jugador
+
+    /* ==========================================================================
+       LÓGICA DEL JUEGO CON GRÁFICOS PIXEL/CANVAS PUROS
+       ========================================================================== */
+    const canvas = document.getElementById('atrapa-canvas');
+    const ctx = canvas.getContext('2d');
+
+    const statPuntos = document.getElementById('stat-puntos');
+    const statVidas = document.getElementById('stat-vidas');
+    const statRecord = document.getElementById('stat-record');
+    const overlayStart = document.getElementById('overlay-start');
+    const btnStart = document.getElementById('btn-start-atrapa');
+    const btnBackMenu = document.getElementById('btn-back-menu');
+
+    let W = 700;
+    let H = 520;
+
+    let puntos = 0;
+    let vidas = VIDAS_INICIALES;
+    let recordPuntos = 0;
+    let loopId = null;
+    let jugando = false;
+    let velocidadCaida = VELOCIDAD_CAIDA_INICIAL;
+
+    // Canasta del jugador
+    const canasta = {
+      x: W / 2 - 50,
+      y: H - 55,
+      ancho: 100,
+      alto: 32,
+      speed: 10
+    };
+
+    function ajustarDimensionesAtrapa() {
+      const esMovil = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+      const wrap = document.querySelector('.atrapa-canvas-wrap');
+      if (esMovil && wrap && window.innerHeight > window.innerWidth) {
+        const wReal = Math.floor(wrap.clientWidth);
+        const hReal = Math.floor(wrap.clientHeight);
+        if (wReal > 50 && hReal > 50) {
+          W = wReal;
+          H = hReal;
+          canvas.width = W;
+          canvas.height = H;
+          canasta.y = H - 55;
+          canasta.x = Math.max(0, Math.min(W - canasta.ancho, canasta.x));
+          return;
+        }
+      }
+      W = 700;
+      H = 520;
+      canvas.width = W;
+      canvas.height = H;
+      canasta.y = H - 55;
+      canasta.x = Math.max(0, Math.min(W - canasta.ancho, canasta.x));
+    }
+
+    // Objetos que caen
+    let objetos = [];
+    let tiempoParaProximoObjeto = 0;
+
+    // Partículas al atrapar
+    let particulas = [];
+
+    btnBackMenu.addEventListener('click', () => {
+      transicion.irA('../index.html');
+    });
+
+    btnStart.addEventListener('click', () => {
+      transicion.iniciarCarga(() => {
+        overlayStart.classList.add('oculto');
+        iniciarPartida();
+      });
+    });
+
+    function iniciarPartida() {
+      ajustarDimensionesAtrapa();
+      puntos = 0;
+      vidas = VIDAS_INICIALES;
+      velocidadCaida = VELOCIDAD_CAIDA_INICIAL;
+      objetos = [];
+      particulas = [];
+      tiempoParaProximoObjeto = INTERVALO_APARICION_INICIAL;
+
+      statPuntos.textContent = '0';
+      actualizarVidasUI();
+      canasta.x = W / 2 - canasta.ancho / 2;
+
+      jugando = true;
+      if (loopId) cancelAnimationFrame(loopId);
+      bucle();
+    }
+
+    function actualizarVidasUI() {
+      statVidas.innerHTML = '';
+      for (let i = 0; i < VIDAS_INICIALES; i++) {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('class', i < vidas ? 'heart-icon' : 'heart-icon lost');
+        svg.innerHTML = '<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>';
+        statVidas.appendChild(svg);
+      }
+    }
+
+    // Controles canasta
+    function moverCanastaConX(clientX) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = W / rect.width;
+      const posX = (clientX - rect.left) * scaleX;
+      canasta.x = Math.max(0, Math.min(W - canasta.ancho, posX - canasta.ancho / 2));
+    }
+
+    canvas.addEventListener('mousemove', (e) => moverCanastaConX(e.clientX));
+
+    if (window.matchMedia('(hover: none) and (pointer: coarse)').matches) {
+      canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (e.touches.length > 0) moverCanastaConX(e.touches[0].clientX);
+      }, { passive: false });
+      canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length > 0) moverCanastaConX(e.touches[0].clientX);
+      }, { passive: true });
+    }
+
+    window.addEventListener('resize', () => {
+      ajustarDimensionesAtrapa();
+      if (!jugando) dibujar();
+    });
+    window.addEventListener('orientationchange', () => {
+      setTimeout(() => {
+        ajustarDimensionesAtrapa();
+        if (!jugando) dibujar();
+      }, 150);
+    });
+
+    const teclas = {};
+    window.addEventListener('keydown', (e) => {
+      teclas[e.code] = true;
+      if (['ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD'].includes(e.code)) e.preventDefault();
+    });
+    window.addEventListener('keyup', (e) => {
+      teclas[e.code] = false;
+    });
+
+    // Generador de frutas/estrellas vs bombas
+    function generarObjeto() {
+      const esMalo = Math.random() < PROBABILIDAD_BOMBA;
+      const tiposBuenos = ['manzana', 'naranja', 'limon', 'estrella'];
+      const tipo = esMalo ? 'bomba' : tiposBuenos[Math.floor(Math.random() * tiposBuenos.length)];
+
+      const tam = 44; // Aumentado para mejor visibilidad y diferenciación clara
+      objetos.push({
+        x: Math.random() * (W - tam - 20) + 10,
+        y: -tam - 10,
+        ancho: tam,
+        alto: tam,
+        radio: tam / 2,
+        tipo: tipo,
+        esMalo: esMalo,
+        vy: velocidadCaida + (Math.random() * 0.4)
+      });
+    }
+
+    function crearParticulas(x, y, color) {
+      for (let i = 0; i < 14; i++) {
+        particulas.push({
+          x: x,
+          y: y,
+          vx: (Math.random() - 0.5) * 8,
+          vy: (Math.random() - 0.8) * 8,
+          size: Math.random() * 5 + 3,
+          color: color,
+          vida: 22
+        });
+      }
+    }
+
+    function bucle() {
+      if (!jugando) return;
+
+      // Movimiento con teclas
+      if (teclas['ArrowLeft'] || teclas['KeyA']) {
+        canasta.x = Math.max(0, canasta.x - canasta.speed);
+      }
+      if (teclas['ArrowRight'] || teclas['KeyD']) {
+        canasta.x = Math.min(W - canasta.ancho, canasta.x + canasta.speed);
+      }
+
+      // Frecuencia dinámica de aparición
+      tiempoParaProximoObjeto--;
+      if (tiempoParaProximoObjeto <= 0) {
+        generarObjeto();
+        const reduccion = Math.floor(puntos / 40);
+        tiempoParaProximoObjeto = Math.max(INTERVALO_APARICION_MINIMO, INTERVALO_APARICION_INICIAL - reduccion);
+      }
+
+      // Actualizar objetos
+      for (let i = objetos.length - 1; i >= 0; i--) {
+        const obj = objetos[i];
+        obj.y += obj.vy;
+
+        // Comprobar colisión con la canasta
+        if (
+          obj.x + obj.ancho >= canasta.x &&
+          obj.x <= canasta.x + canasta.ancho &&
+          obj.y + obj.alto >= canasta.y &&
+          obj.y <= canasta.y + canasta.alto
+        ) {
+          if (obj.esMalo) {
+            // Bomba: Quita vida
+            vidas--;
+            actualizarVidasUI();
+            crearParticulas(obj.x + obj.radio, obj.y + obj.radio, '#ff0055');
+            if (typeof sonidos !== 'undefined') sonidos.golpe();
+
+            if (vidas <= 0) {
+              morir();
+              return;
+            }
+          } else {
+            // Fruta o estrella: Suma puntos
+            puntos += 10;
+            statPuntos.textContent = puntos;
+            crearParticulas(obj.x + obj.radio, obj.y + obj.radio, '#ffe600');
+            if (typeof sonidos !== 'undefined') sonidos.punto();
+
+            // Aumento de velocidad suave cada 50 puntos
+            if (puntos % PUNTOS_POR_AUMENTO_VELOCIDAD === 0) {
+              velocidadCaida = Math.min(VELOCIDAD_CAIDA_MAXIMA, velocidadCaida + INCREMENTO_VELOCIDAD);
+            }
+          }
+
+          objetos.splice(i, 1);
+          continue;
+        }
+
+        // Si se escapa abajo
+        if (obj.y > H + 30) {
+          objetos.splice(i, 1);
+        }
+      }
+
+      // Actualizar partículas
+      for (let i = particulas.length - 1; i >= 0; i--) {
+        const p = particulas[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vida--;
+        if (p.vida <= 0) particulas.splice(i, 1);
+      }
+
+      dibujar();
+
+      if (jugando) {
+        loopId = requestAnimationFrame(bucle);
+      }
+    }
+
+    function morir() {
+      jugando = false;
+      if (typeof sonidos !== 'undefined') sonidos.gameOver();
+
+      if (puntos > recordPuntos) {
+        recordPuntos = puntos;
+        statRecord.textContent = recordPuntos;
+      }
+
+      transicion.mostrarGameOver({
+        puntos: puntos,
+        record: recordPuntos,
+        onReintentar: () => iniciarPartida(),
+        urlMenu: '../index.html'
+      });
+    }
+
+    // Dibujo detallado de frutas/estrellas vs bombas
+    function dibujarObjeto(obj) {
+      const cx = obj.x + obj.radio;
+      const cy = obj.y + obj.radio;
+      const r = obj.radio - 3;
+
+      if (obj.esMalo) {
+        // ==========================================
+        // BOMBA NEGRA CON BORDE ROJO PARPADEANTE
+        // ==========================================
+        const parpadeo = Math.sin(Date.now() / 90) > 0;
+
+        // Borde exterior rojo brillante parpadeante
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy + 2, r + 2, 0, Math.PI * 2);
+        ctx.strokeStyle = parpadeo ? '#ff0033' : '#ff4466';
+        ctx.lineWidth = 3.5;
+        ctx.shadowColor = '#ff0033';
+        ctx.shadowBlur = parpadeo ? 16 : 8;
+        ctx.stroke();
+
+        // Cuerpo negro puro
+        ctx.beginPath();
+        ctx.arc(cx, cy + 2, r, 0, Math.PI * 2);
+        ctx.fillStyle = '#0a0a10';
+        ctx.fill();
+
+        // Cuello de la mecha
+        ctx.fillStyle = '#444';
+        ctx.fillRect(cx - 3, cy - r - 2, 6, 4);
+
+        // Mecha curvada
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - r - 1);
+        ctx.quadraticCurveTo(cx + 6, cy - r - 8, cx + 8, cy - r - 10);
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        // Chispa roja/amarilla parpadeante
+        ctx.fillStyle = parpadeo ? '#ffe600' : '#ff2200';
+        ctx.shadowColor = '#ff3300';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(cx + 8, cy - r - 10, parpadeo ? 4 : 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Calavera o cruz interior roja tenue para peligro evidente
+        ctx.fillStyle = '#ff1144';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('X', cx, cy + 3);
+
+        ctx.restore();
+      } else {
+        // ==========================================
+        // FRUTAS Y ESTRELLAS (COLORES VIVOS Y BRILLANTES)
+        // ==========================================
+        ctx.save();
+
+        if (obj.tipo === 'estrella') {
+          // Estrella amarilla neón de 5 puntas
+          ctx.fillStyle = '#ffe600';
+          ctx.shadowColor = '#ffe600';
+          ctx.shadowBlur = 14;
+
+          ctx.beginPath();
+          for (let i = 0; i < 5; i++) {
+            const rot = (Math.PI / 2) * 3 + (i * Math.PI) / 2.5;
+            const x1 = cx + Math.cos(rot) * r;
+            const y1 = cy + Math.sin(rot) * r;
+            ctx.lineTo(x1, y1);
+
+            const rotInner = rot + Math.PI / 5;
+            const x2 = cx + Math.cos(rotInner) * (r * 0.45);
+            const y2 = cy + Math.sin(rotInner) * (r * 0.45);
+            ctx.lineTo(x2, y2);
+          }
+          ctx.closePath();
+          ctx.fill();
+
+          // Centro brillante
+          ctx.fillStyle = '#fff';
+          ctx.beginPath();
+          ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          // Fruta redonda viva (Manzana roja, naranja o limón verde)
+          let colorFruta = '#ff1744'; // Roja
+          let glowColor = 'rgba(255, 23, 68, 0.7)';
+
+          if (obj.tipo === 'naranja') {
+            colorFruta = '#ff9100'; // Naranja
+            glowColor = 'rgba(255, 145, 0, 0.7)';
+          } else if (obj.tipo === 'limon') {
+            colorFruta = '#76ff03'; // Verde lima neón
+            glowColor = 'rgba(118, 255, 3, 0.7)';
+          }
+
+          // Resplandor neón
+          ctx.shadowColor = glowColor;
+          ctx.shadowBlur = 12;
+
+          // Cuerpo redondo
+          ctx.beginPath();
+          ctx.arc(cx, cy + 2, r, 0, Math.PI * 2);
+          ctx.fillStyle = colorFruta;
+          ctx.fill();
+
+          // Brillo especular blanco curvado
+          ctx.shadowBlur = 0;
+          ctx.beginPath();
+          ctx.arc(cx - r * 0.35, cy - r * 0.35 + 2, r * 0.28, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+          ctx.fill();
+
+          // Tallo marrón
+          ctx.fillStyle = '#8d6e63';
+          ctx.fillRect(cx - 1.5, cy - r - 2, 3, 5);
+
+          // Hojita verde vibrante
+          ctx.fillStyle = '#39ff14';
+          ctx.beginPath();
+          ctx.ellipse(cx + 6, cy - r, 6, 3, Math.PI / 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+    }
+
+    function dibujar() {
+      // Fondo
+      ctx.fillStyle = '#060412';
+      ctx.fillRect(0, 0, W, H);
+
+      // Partículas
+      particulas.forEach(p => {
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, p.size, p.size);
+      });
+
+      // Canasta pixelada arcade
+      ctx.save();
+      ctx.fillStyle = '#ffe600';
+      ctx.shadowColor = '#ffe600';
+      ctx.shadowBlur = 12;
+
+      // Base canasta
+      ctx.fillRect(canasta.x, canasta.y, canasta.ancho, canasta.alto);
+      // Borde interior oscuro
+      ctx.fillStyle = '#1c1500';
+      ctx.fillRect(canasta.x + 6, canasta.y + 6, canasta.ancho - 12, canasta.alto - 12);
+      // Tejido decorativo
+      ctx.fillStyle = '#ffe600';
+      ctx.fillRect(canasta.x + 12, canasta.y + 12, canasta.ancho - 24, 6);
+
+      ctx.restore();
+
+      // Objetos que caen dibujados con formas y colores nítidos
+      objetos.forEach(obj => dibujarObjeto(obj));
+    }
+
+    actualizarVidasUI();
+    dibujar();
+  </script>
+</body>
+</html>

@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Carrera de Autos 2P - Retro Arcade</title>
+  <link rel="stylesheet" href="../css/estilos.css">
+  <link rel="stylesheet" href="../css/movil.css">
+  <style>
+    .split-racing-container {
+      width: min(96vw, 840px);
+      aspect-ratio: 16 / 9;
+      max-height: calc(100vh - 240px);
+      position: relative;
+      background: #000;
+      border: 4px solid var(--neon-yellow);
+      box-shadow: 0 0 25px var(--neon-yellow-glow);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    #racing-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+    }
+
+    .progress-bar-wrap {
+      width: 100%;
+      max-width: 840px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .race-track-progress {
+      width: 100%;
+      height: 14px;
+      background: #0a081a;
+      border: 2px solid #fff;
+      border-radius: 3px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .progress-fill-p1 {
+      height: 100%;
+      background: var(--neon-cyan);
+      box-shadow: 0 0 8px var(--neon-cyan-glow);
+      width: 0%;
+      transition: width 0.1s linear;
+    }
+
+    .progress-fill-p2 {
+      height: 100%;
+      background: var(--neon-magenta);
+      box-shadow: 0 0 8px var(--neon-magenta-glow);
+      width: 0%;
+      transition: width 0.1s linear;
+    }
+
+    .key-indicator-bar {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 6px 12px;
+      width: 100%;
+      max-width: 840px;
+      margin-top: 8px;
+      font-size: clamp(0.55rem, 1.2vw, 0.72rem);
+      line-height: 1.6;
+      min-height: 28px;
+    }
+
+    /* Ocultar / mostrar vistas según dispositivo */
+    .autos-split-mobile {
+      display: none;
+    }
+
+    @media (orientation: portrait), (max-width: 768px) {
+      .split-racing-container,
+      .progress-bar-wrap,
+      .key-indicator-bar,
+      .game-top-bar {
+        display: none !important;
+      }
+      .autos-split-mobile {
+        display: flex !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="crt-overlay" aria-hidden="true"></div>
+
+  <header class="top-controls">
+    <button type="button" class="btn-icon-arcade" id="btn-toggle-sonido" title="Sonido">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+    </button>
+  </header>
+
+  <main class="game-container">
+    <div class="game-top-bar">
+      <button type="button" class="btn-arcade btn-arcade-cyan" id="btn-back-menu" style="padding: 8px 14px; font-size: 0.65rem;">
+        &lt; MENÚ
+      </button>
+
+      <div class="game-stats">
+        <div class="stat-item" style="color: var(--neon-cyan);">J1 CHOQUES: <span id="choques-p1">0</span>/3</div>
+        <div class="stat-item" style="color: var(--neon-yellow);">DISTANCIA: <span id="dist-general">0</span>m</div>
+        <div class="stat-item" style="color: var(--neon-magenta);">J2 CHOQUES: <span id="choques-p2">0</span>/3</div>
+      </div>
+    </div>
+
+    <div class="arcade-screen" style="padding: 10px;">
+      <!-- Overlay de Inicio -->
+      <div class="game-start-overlay" id="overlay-start">
+        <div class="start-icon" style="margin-bottom: 8px;">
+          <svg width="60" height="60" viewBox="0 0 64 64" fill="none">
+            <rect x="12" y="14" width="16" height="36" rx="3" fill="#00f0ff" stroke="#fff" stroke-width="2"/>
+            <rect x="36" y="14" width="16" height="36" rx="3" fill="#ff007f" stroke="#fff" stroke-width="2"/>
+            <line x1="32" y1="6" x2="32" y2="58" stroke="#ffe600" stroke-width="3" stroke-dasharray="4 4"/>
+          </svg>
+        </div>
+        <h1 class="game-title-big">CARRERA DE AUTOS 2P</h1>
+        <p class="game-instructions">
+          J1: <b>[A / D]</b> | J2: <b>[FLECHAS &lt; &gt;]</b>. ¡CADA UNO CON SUS PROPIOS OBSTÁCULOS! ¡EL PRIMERO EN CHOCAR 3 VECES PIERDE!
+        </p>
+        <button type="button" class="btn-arcade btn-arcade-green blink-text" id="btn-start-race" style="margin-top: 10px;">
+          > START
+        </button>
+      </div>
+
+      <!-- Vista para Computador (2 pistas paralelas) -->
+      <div class="split-racing-container">
+        <canvas id="racing-canvas" width="800" height="450"></canvas>
+      </div>
+
+      <!-- Vista para Celular Frente a Frente (Pantalla dividida con J1 rotado 180°) -->
+      <div class="split-vertical-container autos-split-mobile">
+        <!-- Mitad Superior: JUGADOR 1 (Rotado 180° para ver desde el otro lado de la mesa) -->
+        <div class="player-half-top" id="half-j1">
+          <canvas id="canvas-mob-j1" width="400" height="450" style="width: 100%; height: 100%; display: block;"></canvas>
+          <div class="autos-touch-controls">
+            <button type="button" class="btn-carril-touch" id="btn-j1-izq" style="color: var(--neon-cyan);">&lt;</button>
+            <button type="button" class="btn-carril-touch" id="btn-j1-der" style="color: var(--neon-cyan);">&gt;</button>
+          </div>
+        </div>
+
+        <!-- Franja central con marcador orientado a cada jugador -->
+        <div class="center-split-divider">
+          <button type="button" class="btn-arcade btn-arcade-cyan" id="btn-mob-menu" style="font-size: 0.58rem; padding: 4px 8px; pointer-events: auto; flex-shrink: 0;">
+            &lt; SALIR
+          </button>
+          <div class="split-scores-group">
+            <span class="score-rot" style="color: var(--neon-cyan);">J1: <b id="mob-choques-j1">0</b>/3</span>
+            <span class="score-vs" style="color: var(--neon-yellow);">VS</span>
+            <span class="score-norm" style="color: var(--neon-magenta);">J2: <b id="mob-choques-j2">0</b>/3</span>
+          </div>
+        </div>
+
+        <!-- Mitad Inferior: JUGADOR 2 (Normal) -->
+        <div class="player-half-bottom" id="half-j2">
+          <canvas id="canvas-mob-j2" width="400" height="450" style="width: 100%; height: 100%; display: block;"></canvas>
+          <div class="autos-touch-controls">
+            <button type="button" class="btn-carril-touch" id="btn-j2-izq" style="color: var(--neon-magenta);">&lt;</button>
+            <button type="button" class="btn-carril-touch" id="btn-j2-der" style="color: var(--neon-magenta);">&gt;</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Barras de Progreso Computador -->
+      <div class="progress-bar-wrap">
+        <div class="race-track-progress" title="Progreso Jugador 1">
+          <div class="progress-fill-p1" id="bar-p1"></div>
+        </div>
+        <div class="race-track-progress" title="Progreso Jugador 2">
+          <div class="progress-fill-p2" id="bar-p2"></div>
+        </div>
+      </div>
+
+      <div class="key-indicator-bar">
+        <span style="color: var(--neon-cyan);">J1 (AZUL): [A] IZQUIERDA / [D] DERECHA</span>
+        <span style="color: var(--neon-magenta);">J2 (ROSA): [FLECHA IZQ] / [FLECHA DER]</span>
+      </div>
+    </div>
+  </main>
+
+  <script src="../js/sonidos.js"></script>
+  <script src="../js/transiciones.js"></script>
+  <script src="../js/movil.js"></script>
+
+  <script>
+    /* ==========================================================================
+       CONSTANTES CONFIGURABLES DE LA CARRERA DE AUTOS
+       ========================================================================== */
+    const MAX_CHOQUES = 3;                    // 3 choques = eliminación del jugador
+    const DISTANCIA_META = 1000;              // Metros meta
+    const VELOCIDAD_BASE = 2.8;               // Velocidad inicial de la pista
+    const VELOCIDAD_MAXIMA = 6.8;             // Velocidad máxima permitida
+    const FRECUENCIA_OBSTACULO = 130;         // Frames entre obstáculos generados
+    const DURACION_CHOQUE_FRAMES = 55;        // Frames de frenado e invencibilidad tras choque
+
+    const canvas = document.getElementById('racing-canvas');
+    const ctx = canvas.getContext('2d');
+
+    // Elementos de marcador en Computador y Móvil
+    const choquesP1El = document.getElementById('choques-p1');
+    const choquesP2El = document.getElementById('choques-p2');
+    const distGeneralEl = document.getElementById('dist-general');
+    const mobChoquesJ1El = document.getElementById('mob-choques-j1');
+    const mobChoquesJ2El = document.getElementById('mob-choques-j2');
+    const barP1 = document.getElementById('bar-p1');
+    const barP2 = document.getElementById('bar-p2');
+    const overlayStart = document.getElementById('overlay-start');
+    const btnStart = document.getElementById('btn-start-race');
+    const btnBackMenu = document.getElementById('btn-back-menu');
+    const btnMobMenu = document.getElementById('btn-mob-menu');
+
+    // Lienzos para celular frente a frente
+    const canvasMobJ1 = document.getElementById('canvas-mob-j1');
+    const ctxMobJ1 = canvasMobJ1 ? canvasMobJ1.getContext('2d') : null;
+    const canvasMobJ2 = document.getElementById('canvas-mob-j2');
+    const ctxMobJ2 = canvasMobJ2 ? canvasMobJ2.getContext('2d') : null;
+
+    const W = 800;
+    const H = 450;
+    const MITAD_W = W / 2;
+    const CARRILES_CANT = 3;
+
+    let jugando = false;
+    let loopId = null;
+    let offsetCarretera1 = 0;
+    let offsetCarretera2 = 0;
+
+    // Temporizadores y contadores de obstáculos independientes para cada jugador
+    let framesContadorJ1 = 0;
+    let framesContadorJ2 = 0;
+    let contadorObstaculosJ1 = 0;
+    let contadorObstaculosJ2 = 0;
+
+    // Estado Jugador 1
+    const j1 = {
+      carril: 1,           // 0, 1 o 2
+      x: 0,
+      y: H - 85,
+      ancho: 36,
+      alto: 64,
+      distancia: 0,
+      velocidad: VELOCIDAD_BASE,
+      choqueTimer: 0,
+      choques: 0,
+      color: '#00f0ff'
+    };
+
+    // Estado Jugador 2
+    const j2 = {
+      carril: 1,           // 0, 1 o 2
+      x: 0,
+      y: H - 85,
+      ancho: 36,
+      alto: 64,
+      distancia: 0,
+      velocidad: VELOCIDAD_BASE,
+      choqueTimer: 0,
+      choques: 0,
+      color: '#ff007f'
+    };
+
+    // Obstáculos completamente independientes para cada jugador
+    let obstaculosJ1 = [];
+    let obstaculosJ2 = [];
+
+    // Calcular coordenadas X del carril en una pista
+    function getCarrilX(pistaOffsetX, carrilIndex) {
+      const anchoPista = MITAD_W - 40;
+      const anchoCarril = anchoPista / CARRILES_CANT;
+      return pistaOffsetX + 20 + carrilIndex * anchoCarril + (anchoCarril / 2);
+    }
+
+    // Controles por teclado (Computador)
+    window.addEventListener('keydown', (e) => {
+      if (!jugando) return;
+
+      // J1: A y D
+      if (e.code === 'KeyA') {
+        if (j1.carril > 0) {
+          j1.carril--;
+          if (typeof sonidos !== 'undefined') sonidos.mover();
+        }
+      } else if (e.code === 'KeyD') {
+        if (j1.carril < CARRILES_CANT - 1) {
+          j1.carril++;
+          if (typeof sonidos !== 'undefined') sonidos.mover();
+        }
+      }
+
+      // J2: Flechas Izquierda y Derecha
+      if (e.code === 'ArrowLeft') {
+        e.preventDefault();
+        if (j2.carril > 0) {
+          j2.carril--;
+          if (typeof sonidos !== 'undefined') sonidos.mover();
+        }
+      } else if (e.code === 'ArrowRight') {
+        e.preventDefault();
+        if (j2.carril < CARRILES_CANT - 1) {
+          j2.carril++;
+          if (typeof sonidos !== 'undefined') sonidos.mover();
+        }
+      }
+    });
+
+    // Botones táctiles en móvil frente a frente (solo en dispositivos táctiles reales)
+    const esTactilMovil = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+    if (esTactilMovil) {
+      const btnJ1Izq = document.getElementById('btn-j1-izq');
+      const btnJ1Der = document.getElementById('btn-j1-der');
+      const btnJ2Izq = document.getElementById('btn-j2-izq');
+      const btnJ2Der = document.getElementById('btn-j2-der');
+
+      if (btnJ1Izq) {
+        btnJ1Izq.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          if (jugando && j1.carril > 0) {
+            j1.carril--;
+            if (typeof sonidos !== 'undefined') sonidos.mover();
+          }
+        });
+        btnJ1Der.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          if (jugando && j1.carril < CARRILES_CANT - 1) {
+            j1.carril++;
+            if (typeof sonidos !== 'undefined') sonidos.mover();
+          }
+        });
+      }
+
+      if (btnJ2Izq) {
+        btnJ2Izq.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          if (jugando && j2.carril > 0) {
+            j2.carril--;
+            if (typeof sonidos !== 'undefined') sonidos.mover();
+          }
+        });
+        btnJ2Der.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          if (jugando && j2.carril < CARRILES_CANT - 1) {
+            j2.carril++;
+            if (typeof sonidos !== 'undefined') sonidos.mover();
+          }
+        });
+      }
+
+      // Guardia de orientación (requiere vertical en celular para jugar frente a frente)
+      if (typeof RetroMovil !== 'undefined') {
+        new RetroMovil.OrientationGuard('portrait');
+      }
+    }
+
+    btnBackMenu.addEventListener('click', () => {
+      transicion.irA('../index.html');
+    });
+
+    if (btnMobMenu) {
+      btnMobMenu.addEventListener('click', () => {
+        transicion.irA('../index.html');
+      });
+    }
+
+    btnStart.addEventListener('click', () => {
+      transicion.iniciarCarga(() => {
+        overlayStart.classList.add('oculto');
+        iniciarPartida();
+      });
+    });
+
+    function iniciarPartida() {
+      jugando = true;
+      framesContadorJ1 = 0;
+      framesContadorJ2 = 0;
+      contadorObstaculosJ1 = 0;
+      contadorObstaculosJ2 = 0;
+      obstaculosJ1 = [];
+      obstaculosJ2 = [];
+
+      j1.carril = 1;
+      j1.distancia = 0;
+      j1.velocidad = VELOCIDAD_BASE;
+      j1.choqueTimer = 0;
+      j1.choques = 0;
+
+      j2.carril = 1;
+      j2.distancia = 0;
+      j2.velocidad = VELOCIDAD_BASE;
+      j2.choqueTimer = 0;
+      j2.choques = 0;
+
+      actualizarMarcadoresUI();
+
+      if (loopId) cancelAnimationFrame(loopId);
+      bucle();
+    }
+
+    function actualizarMarcadoresUI() {
+      choquesP1El.textContent = j1.choques;
+      choquesP2El.textContent = j2.choques;
+      if (mobChoquesJ1El) mobChoquesJ1El.textContent = j1.choques;
+      if (mobChoquesJ2El) mobChoquesJ2El.textContent = j2.choques;
+      const dMayor = Math.floor(Math.max(j1.distancia, j2.distancia));
+      distGeneralEl.textContent = dMayor;
+      barP1.style.width = Math.min(100, (j1.distancia / DISTANCIA_META) * 100) + '%';
+      barP2.style.width = Math.min(100, (j2.distancia / DISTANCIA_META) * 100) + '%';
+    }
+
+    // Generador de obstáculos independiente para Jugador 1
+    function generarObstaculoJ1() {
+      contadorObstaculosJ1++;
+      if (contadorObstaculosJ1 % 4 === 0) {
+        const carrilLibre = Math.floor(Math.random() * CARRILES_CANT);
+        for (let c = 0; c < CARRILES_CANT; c++) {
+          if (c !== carrilLibre) {
+            obstaculosJ1.push({ carril: c, tipo: 'barrera', y: -70, ancho: 44, alto: 30 });
+          }
+        }
+      } else {
+        const carril = Math.floor(Math.random() * CARRILES_CANT);
+        const tipos = ['cono', 'mancha', 'rival'];
+        const tipo = tipos[Math.floor(Math.random() * tipos.length)];
+        obstaculosJ1.push({ carril: carril, tipo: tipo, y: -70, ancho: 32, alto: tipo === 'rival' ? 58 : 30 });
+      }
+    }
+
+    // Generador de obstáculos independiente para Jugador 2
+    function generarObstaculoJ2() {
+      contadorObstaculosJ2++;
+      if (contadorObstaculosJ2 % 4 === 0) {
+        const carrilLibre = Math.floor(Math.random() * CARRILES_CANT);
+        for (let c = 0; c < CARRILES_CANT; c++) {
+          if (c !== carrilLibre) {
+            obstaculosJ2.push({ carril: c, tipo: 'barrera', y: -70, ancho: 44, alto: 30 });
+          }
+        }
+      } else {
+        const carril = Math.floor(Math.random() * CARRILES_CANT);
+        const tipos = ['cono', 'mancha', 'rival'];
+        const tipo = tipos[Math.floor(Math.random() * tipos.length)];
+        obstaculosJ2.push({ carril: carril, tipo: tipo, y: -70, ancho: 32, alto: tipo === 'rival' ? 58 : 30 });
+      }
+    }
+
+    function bucle() {
+      if (!jugando) return;
+
+      framesContadorJ1++;
+      framesContadorJ2++;
+
+      // 1. Aceleración gradual idéntica
+      const factorAcel1 = Math.min(VELOCIDAD_MAXIMA, VELOCIDAD_BASE + (j1.distancia / 320));
+      const factorAcel2 = Math.min(VELOCIDAD_MAXIMA, VELOCIDAD_BASE + (j2.distancia / 320));
+
+      if (j1.choqueTimer > 0) {
+        j1.choqueTimer--;
+        j1.velocidad = VELOCIDAD_BASE * 0.4;
+      } else {
+        j1.velocidad = factorAcel1;
+      }
+
+      if (j2.choqueTimer > 0) {
+        j2.choqueTimer--;
+        j2.velocidad = VELOCIDAD_BASE * 0.4;
+      } else {
+        j2.velocidad = factorAcel2;
+      }
+
+      // 2. Incrementar distancias
+      j1.distancia += j1.velocidad * 0.08;
+      j2.distancia += j2.velocidad * 0.08;
+      actualizarMarcadoresUI();
+
+      // 3. Generar obstáculos independientes con su propio ritmo
+      if (framesContadorJ1 % FRECUENCIA_OBSTACULO === 0) {
+        generarObstaculoJ1();
+      }
+      if (framesContadorJ2 % FRECUENCIA_OBSTACULO === 0) {
+        generarObstaculoJ2();
+      }
+
+      // 4. Mover y colisionar obstáculos de J1
+      for (let i = obstaculosJ1.length - 1; i >= 0; i--) {
+        const obs = obstaculosJ1[i];
+        obs.y += j1.velocidad;
+
+        if (j1.choqueTimer === 0 && obs.carril === j1.carril) {
+          if (obs.y + obs.alto >= j1.y && obs.y <= j1.y + j1.alto) {
+            j1.choques++;
+            j1.choqueTimer = DURACION_CHOQUE_FRAMES;
+            actualizarMarcadoresUI();
+            if (typeof sonidos !== 'undefined') sonidos.golpe();
+            if (j1.choques >= MAX_CHOQUES) {
+              evaluarGanadorPorChoques();
+              return;
+            }
+          }
+        }
+        if (obs.y > H + 80) obstaculosJ1.splice(i, 1);
+      }
+
+      // 5. Mover y colisionar obstáculos de J2
+      for (let i = obstaculosJ2.length - 1; i >= 0; i--) {
+        const obs = obstaculosJ2[i];
+        obs.y += j2.velocidad;
+
+        if (j2.choqueTimer === 0 && obs.carril === j2.carril) {
+          if (obs.y + obs.alto >= j2.y && obs.y <= j2.y + j2.alto) {
+            j2.choques++;
+            j2.choqueTimer = DURACION_CHOQUE_FRAMES;
+            actualizarMarcadoresUI();
+            if (typeof sonidos !== 'undefined') sonidos.golpe();
+            if (j2.choques >= MAX_CHOQUES) {
+              evaluarGanadorPorChoques();
+              return;
+            }
+          }
+        }
+        if (obs.y > H + 80) obstaculosJ2.splice(i, 1);
+      }
+
+      // Suavizado posición X de autos
+      const destinoX1 = getCarrilX(0, j1.carril);
+      const destinoX2 = getCarrilX(MITAD_W, j2.carril);
+      j1.x += (destinoX1 - j1.x) * 0.28;
+      j2.x += (destinoX2 - j2.x) * 0.28;
+
+      offsetCarretera1 = (offsetCarretera1 + j1.velocidad) % 40;
+      offsetCarretera2 = (offsetCarretera2 + j2.velocidad) % 40;
+
+      dibujar();
+
+      if (jugando) {
+        loopId = requestAnimationFrame(bucle);
+      }
+    }
+
+    function evaluarGanadorPorChoques() {
+      jugando = false;
+      if (typeof sonidos !== 'undefined') sonidos.victoria();
+
+      let titulo = '';
+      if (j1.choques >= MAX_CHOQUES && j2.choques >= MAX_CHOQUES) {
+        titulo = '¡AMBOS CHOCARON 3 VECES! EMPATE';
+      } else if (j1.choques >= MAX_CHOQUES) {
+        titulo = '¡JUGADOR 2 GANA LA CARRERA!';
+      } else {
+        titulo = '¡JUGADOR 1 GANA LA CARRERA!';
+      }
+
+      transicion.mostrarVictoria({
+        titulo: titulo,
+        lineasInfo: [
+          { label: 'JUGADOR 1 (AZUL)', valor: `${j1.choques} / ${MAX_CHOQUES} CHOQUES (${Math.floor(j1.distancia)}m)` },
+          { label: 'JUGADOR 2 (ROSA)', valor: `${j2.choques} / ${MAX_CHOQUES} CHOQUES (${Math.floor(j2.distancia)}m)` },
+          { label: 'REGLA', valor: '3 CHOQUES = ELIMINADO' }
+        ],
+        onReintentar: () => iniciarPartida(),
+        urlMenu: '../index.html#seleccion'
+      });
+    }
+
+    // Dibujo de un auto pixel art retro
+    function dibujarAutoPixelEn(targetCtx, cx, cy, color, parpadea) {
+      if (parpadea && Math.floor(Date.now() / 60) % 2 === 0) return;
+
+      const x = cx - 18;
+      const y = cy;
+
+      targetCtx.save();
+      // Chasis
+      targetCtx.fillStyle = color;
+      targetCtx.shadowColor = color;
+      targetCtx.shadowBlur = 10;
+      targetCtx.fillRect(x + 4, y, 28, 64);
+
+      // Parabrisas delantero y trasero
+      targetCtx.fillStyle = '#070614';
+      targetCtx.fillRect(x + 7, y + 14, 22, 12);
+      targetCtx.fillRect(x + 7, y + 42, 22, 8);
+
+      // Techo
+      targetCtx.fillStyle = color;
+      targetCtx.fillRect(x + 8, y + 26, 20, 16);
+
+      // Luces delanteras (amarillas)
+      targetCtx.fillStyle = '#ffe600';
+      targetCtx.fillRect(x + 5, y + 2, 6, 4);
+      targetCtx.fillRect(x + 25, y + 2, 6, 4);
+
+      // Luces traseras (rojas)
+      targetCtx.fillStyle = '#ff0033';
+      targetCtx.fillRect(x + 5, y + 58, 6, 4);
+      targetCtx.fillRect(x + 25, y + 58, 6, 4);
+
+      // Ruedas negras
+      targetCtx.fillStyle = '#000';
+      targetCtx.fillRect(x, y + 8, 4, 14);
+      targetCtx.fillRect(x + 32, y + 8, 4, 14);
+      targetCtx.fillRect(x, y + 42, 4, 14);
+      targetCtx.fillRect(x + 32, y + 42, 4, 14);
+
+      targetCtx.restore();
+    }
+
+    // Dibujo de obstáculo pixel art
+    function dibujarObstaculoPixelEn(targetCtx, cx, cy, tipo) {
+      targetCtx.save();
+      if (tipo === 'cono') {
+        targetCtx.fillStyle = '#ff6d00';
+        targetCtx.shadowColor = '#ff6d00';
+        targetCtx.shadowBlur = 8;
+        targetCtx.beginPath();
+        targetCtx.moveTo(cx, cy);
+        targetCtx.lineTo(cx - 14, cy + 26);
+        targetCtx.lineTo(cx + 14, cy + 26);
+        targetCtx.closePath();
+        targetCtx.fill();
+
+        targetCtx.fillStyle = '#fff';
+        targetCtx.fillRect(cx - 7, cy + 12, 14, 5);
+
+        targetCtx.fillStyle = '#ff6d00';
+        targetCtx.fillRect(cx - 16, cy + 24, 32, 5);
+      } else if (tipo === 'mancha') {
+        targetCtx.fillStyle = '#261b3d';
+        targetCtx.beginPath();
+        targetCtx.ellipse(cx, cy + 12, 18, 10, 0, 0, Math.PI * 2);
+        targetCtx.fill();
+        targetCtx.fillStyle = '#00f0ff';
+        targetCtx.fillRect(cx - 4, cy + 8, 8, 3);
+      } else if (tipo === 'barrera') {
+        targetCtx.fillStyle = '#ff0055';
+        targetCtx.shadowColor = '#ff0055';
+        targetCtx.shadowBlur = 10;
+        targetCtx.fillRect(cx - 26, cy + 4, 52, 20);
+
+        targetCtx.fillStyle = '#ffe600';
+        for (let bx = cx - 22; bx < cx + 22; bx += 12) {
+          targetCtx.beginPath();
+          targetCtx.moveTo(bx, cy + 24);
+          targetCtx.lineTo(bx + 6, cy + 4);
+          targetCtx.lineTo(bx + 11, cy + 4);
+          targetCtx.lineTo(bx + 5, cy + 24);
+          targetCtx.closePath();
+          targetCtx.fill();
+        }
+
+        targetCtx.fillStyle = '#ffffff';
+        targetCtx.fillRect(cx - 24, cy + 24, 6, 8);
+        targetCtx.fillRect(cx + 18, cy + 24, 6, 8);
+      } else {
+        dibujarAutoPixelEn(targetCtx, cx, cy, '#ffe600', false);
+      }
+      targetCtx.restore();
+    }
+
+    // Dibujo de una pista vertical de 3 carriles
+    function dibujarPistaEn(targetCtx, offsetX, offsetAnimY, trackW) {
+      const pistaW = trackW || (MITAD_W - 20);
+
+      // Asfalto
+      targetCtx.fillStyle = '#0a0918';
+      targetCtx.fillRect(offsetX + 10, 0, pistaW, H);
+
+      // Bordes neón
+      targetCtx.strokeStyle = '#ffe600';
+      targetCtx.lineWidth = 4;
+      targetCtx.beginPath();
+      targetCtx.moveTo(offsetX + 10, 0);
+      targetCtx.lineTo(offsetX + 10, H);
+      targetCtx.moveTo(offsetX + 10 + pistaW, 0);
+      targetCtx.lineTo(offsetX + 10 + pistaW, H);
+      targetCtx.stroke();
+
+      // Líneas divisorias de carriles discontinuas
+      targetCtx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+      targetCtx.lineWidth = 3;
+      const anchoCarril = (pistaW - 20) / CARRILES_CANT;
+
+      for (let c = 1; c < CARRILES_CANT; c++) {
+        const lx = offsetX + 20 + c * anchoCarril;
+        targetCtx.beginPath();
+        targetCtx.setLineDash([16, 16]);
+        targetCtx.lineDashOffset = -offsetAnimY;
+        targetCtx.moveTo(lx, 0);
+        targetCtx.lineTo(lx, H);
+        targetCtx.stroke();
+      }
+      targetCtx.setLineDash([]);
+    }
+
+    function dibujar() {
+      // 1. Dibujar en el canvas de computador
+      ctx.fillStyle = '#03020a';
+      ctx.fillRect(0, 0, W, H);
+
+      // Pista J1 (Izquierda)
+      dibujarPistaEn(ctx, 0, offsetCarretera1);
+      // Pista J2 (Derecha)
+      dibujarPistaEn(ctx, MITAD_W, offsetCarretera2);
+
+      // Línea divisoria central de la pantalla
+      ctx.strokeStyle = '#ffe600';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(MITAD_W, 0);
+      ctx.lineTo(MITAD_W, H);
+      ctx.stroke();
+
+      // Obstáculos en Pista J1
+      obstaculosJ1.forEach(obs => {
+        const cx1 = getCarrilX(0, obs.carril);
+        dibujarObstaculoPixelEn(ctx, cx1, obs.y, obs.tipo);
+      });
+
+      // Obstáculos en Pista J2
+      obstaculosJ2.forEach(obs => {
+        const cx2 = getCarrilX(MITAD_W, obs.carril);
+        dibujarObstaculoPixelEn(ctx, cx2, obs.y, obs.tipo);
+      });
+
+      // Auto J1
+      dibujarAutoPixelEn(ctx, j1.x, j1.y, j1.color, j1.choqueTimer > 0);
+      // Auto J2
+      dibujarAutoPixelEn(ctx, j2.x, j2.y, j2.color, j2.choqueTimer > 0);
+
+      // 2. Dibujar en los canvas de celular frente a frente (si están en pantalla)
+      if (ctxMobJ1 && canvasMobJ1 && canvasMobJ1.offsetParent !== null) {
+        ctxMobJ1.fillStyle = '#03020a';
+        ctxMobJ1.fillRect(0, 0, 400, H);
+        dibujarPistaEn(ctxMobJ1, 0, offsetCarretera1, 380);
+
+        obstaculosJ1.forEach(obs => {
+          const cx1 = getCarrilX(0, obs.carril);
+          dibujarObstaculoPixelEn(ctxMobJ1, cx1, obs.y, obs.tipo);
+        });
+        dibujarAutoPixelEn(ctxMobJ1, j1.x, j1.y, j1.color, j1.choqueTimer > 0);
+      }
+
+      if (ctxMobJ2 && canvasMobJ2 && canvasMobJ2.offsetParent !== null) {
+        ctxMobJ2.fillStyle = '#03020a';
+        ctxMobJ2.fillRect(0, 0, 400, H);
+        dibujarPistaEn(ctxMobJ2, 0, offsetCarretera2, 380);
+
+        obstaculosJ2.forEach(obs => {
+          const cx2 = getCarrilX(0, obs.carril);
+          dibujarObstaculoPixelEn(ctxMobJ2, cx2, obs.y, obs.tipo);
+        });
+        // Coordenada local de J2 en el canvas individual de 400px de ancho
+        const localX2 = j2.x - MITAD_W;
+        dibujarAutoPixelEn(ctxMobJ2, localX2, j2.y, j2.color, j2.choqueTimer > 0);
+      }
+    }
+
+    // Posición inicial de autos
+    j1.x = getCarrilX(0, 1);
+    j2.x = getCarrilX(MITAD_W, 1);
+    dibujar();
+  </script>
+</body>
+</html>

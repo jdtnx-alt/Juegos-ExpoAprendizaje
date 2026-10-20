@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Culebrita (Snake) - Retro Arcade</title>
+  <link rel="stylesheet" href="../css/estilos.css">
+  <link rel="stylesheet" href="../css/movil.css">
+  <style>
+    .snake-canvas-wrap {
+      width: min(92vw, 480px, calc(100vh - 340px));
+      aspect-ratio: 1 / 1;
+      position: relative;
+      background: #000;
+      border: 4px solid var(--neon-green);
+      box-shadow: 0 0 25px var(--neon-green-glow);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 6px auto;
+    }
+
+    #snake-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+    }
+
+    /* D-PAD táctil arcade */
+    .d-pad-container {
+      display: grid;
+      grid-template-columns: repeat(3, 56px);
+      grid-template-rows: repeat(3, 50px);
+      gap: 6px;
+      margin: 10px auto;
+      justify-content: center;
+    }
+
+    .d-btn {
+      background: #14102e;
+      border: 2px solid var(--neon-cyan);
+      color: var(--neon-cyan);
+      font-size: 1.1rem;
+      font-family: inherit;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 4px 0 #005f66;
+    }
+    .d-btn:active {
+      transform: translateY(3px);
+      box-shadow: 0 1px 0 #005f66;
+    }
+    .d-btn.up { grid-column: 2; grid-row: 1; }
+    .d-btn.left { grid-column: 1; grid-row: 2; }
+    .d-btn.down { grid-column: 2; grid-row: 2; }
+    .d-btn.right { grid-column: 3; grid-row: 2; }
+  </style>
+</head>
+<body>
+  <div class="crt-overlay" aria-hidden="true"></div>
+
+  <header class="top-controls">
+    <button type="button" class="btn-icon-arcade" id="btn-toggle-sonido" title="Sonido">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+    </button>
+  </header>
+
+  <main class="game-container">
+    <div class="game-top-bar">
+      <button type="button" class="btn-arcade btn-arcade-cyan" id="btn-back-menu" style="padding: 8px 14px; font-size: 0.65rem;">
+        &lt; MENÚ
+      </button>
+
+      <div class="game-stats">
+        <div class="stat-item">PUNTOS: <span id="stat-puntos" style="color: var(--neon-green);">0</span></div>
+        <div class="stat-item">RÉCORD: <span id="stat-record" style="color: var(--neon-yellow);">0</span></div>
+      </div>
+    </div>
+
+    <div class="arcade-screen" style="padding: 10px;">
+      <!-- Overlay de Inicio -->
+      <div class="game-start-overlay" id="overlay-start">
+        <div class="start-icon" style="margin-bottom: 8px;">
+          <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
+            <rect x="12" y="28" width="10" height="10" rx="2" fill="#ffe600"/>
+            <rect x="24" y="28" width="10" height="10" rx="2" fill="#39ff14"/>
+            <rect x="36" y="28" width="10" height="10" rx="2" fill="#39ff14"/>
+            <rect x="36" y="16" width="10" height="10" rx="2" fill="#39ff14"/>
+            <rect x="48" y="16" width="10" height="10" rx="2" fill="#ff0055"/>
+          </svg>
+        </div>
+        <h1 class="game-title-big">CULEBRITA RETRO</h1>
+        <p class="game-instructions">
+          MUEVE LA SERPIENTE CON <b>[WASD]</b>, <b>[FLECHAS]</b> O LA CRUCETA TÁCTIL. ¡COME MANZANAS Y NO CHOQUES CONTRA MUROS NI CONTRA TI!
+        </p>
+        <button type="button" class="btn-arcade btn-arcade-green blink-text" id="btn-start-snake" style="margin-top: 10px;">
+          > START
+        </button>
+      </div>
+
+      <div class="snake-canvas-wrap">
+        <canvas id="snake-canvas" width="400" height="400"></canvas>
+      </div>
+
+      <!-- Controles en pantalla (D-PAD) -->
+      <div class="d-pad-container" id="dpad">
+        <button type="button" class="d-btn up" id="btn-up" aria-label="Arriba">^</button>
+        <button type="button" class="d-btn left" id="btn-left" aria-label="Izquierda">&lt;</button>
+        <button type="button" class="d-btn down" id="btn-down" aria-label="Abajo">v</button>
+        <button type="button" class="d-btn right" id="btn-right" aria-label="Derecha">&gt;</button>
+      </div>
+    </div>
+  </main>
+
+  <script src="../js/sonidos.js"></script>
+  <script src="../js/transiciones.js"></script>
+  <script src="../js/movil.js"></script>
+
+  <script>
+    /* ==========================================================================
+       LÓGICA DE CULEBRITA (SNAKE) 8-BIT
+       ========================================================================== */
+    const canvas = document.getElementById('snake-canvas');
+    const ctx = canvas.getContext('2d');
+
+    const statPuntos = document.getElementById('stat-puntos');
+    const statRecord = document.getElementById('stat-record');
+    const overlayStart = document.getElementById('overlay-start');
+    const btnStart = document.getElementById('btn-start-snake');
+    const btnBackMenu = document.getElementById('btn-back-menu');
+
+    const GRID = 20; // 20x20 celdas
+    const TILE_SIZE = 20;
+
+    let serpiente = [];
+    let direccion = { x: 1, y: 0 };
+    let siguienteDireccion = { x: 1, y: 0 };
+    let comida = { x: 15, y: 10 };
+    let puntos = 0;
+    let recordPuntos = 0;
+    let loopInterval = null;
+    let velocidadMs = 120;
+    let jugando = false;
+
+    btnBackMenu.addEventListener('click', () => {
+      transicion.irA('../index.html');
+    });
+
+    btnStart.addEventListener('click', () => {
+      transicion.iniciarCarga(() => {
+        overlayStart.classList.add('oculto');
+        iniciarPartida();
+      });
+    });
+
+    function iniciarPartida() {
+      puntos = 0;
+      velocidadMs = 125;
+      statPuntos.textContent = '0';
+
+      serpiente = [
+        { x: 6, y: 10 },
+        { x: 5, y: 10 },
+        { x: 4, y: 10 }
+      ];
+      direccion = { x: 1, y: 0 };
+      siguienteDireccion = { x: 1, y: 0 };
+
+      generarComida();
+      jugando = true;
+
+      clearInterval(loopInterval);
+      loopInterval = setInterval(cicloJuego, velocidadMs);
+    }
+
+    function generarComida() {
+      let nuevaX, nuevaY;
+      let colision;
+      do {
+        nuevaX = Math.floor(Math.random() * GRID);
+        nuevaY = Math.floor(Math.random() * GRID);
+        colision = serpiente.some(seg => seg.x === nuevaX && seg.y === nuevaY);
+      } while (colision);
+
+      comida = { x: nuevaX, y: nuevaY };
+    }
+
+    // Prevenir giros de 180°
+    function cambiarDireccion(nx, ny) {
+      if (!jugando) return;
+      if (nx === -direccion.x && ny === -direccion.y) return; // Anti-180
+      siguienteDireccion = { x: nx, y: ny };
+      if (typeof sonidos !== 'undefined') sonidos.bip();
+    }
+
+    // Escucha de teclado
+    window.addEventListener('keydown', (e) => {
+      switch (e.code) {
+        case 'ArrowUp':
+        case 'KeyW':
+          e.preventDefault();
+          cambiarDireccion(0, -1);
+          break;
+        case 'ArrowDown':
+        case 'KeyS':
+          e.preventDefault();
+          cambiarDireccion(0, 1);
+          break;
+        case 'ArrowLeft':
+        case 'KeyA':
+          e.preventDefault();
+          cambiarDireccion(-1, 0);
+          break;
+        case 'ArrowRight':
+        case 'KeyD':
+          e.preventDefault();
+          cambiarDireccion(1, 0);
+          break;
+      }
+    });
+
+    // Controles táctiles D-PAD y Swipe (solo en dispositivos táctiles reales)
+    const esTactilSnake = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+    if (esTactilSnake) {
+      const enlazarDpadSnake = (id, dx, dy) => {
+        const b = document.getElementById(id);
+        if (!b) return;
+        b.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          cambiarDireccion(dx, dy);
+        });
+        b.addEventListener('click', (e) => e.preventDefault());
+      };
+      enlazarDpadSnake('btn-up', 0, -1);
+      enlazarDpadSnake('btn-down', 0, 1);
+      enlazarDpadSnake('btn-left', -1, 0);
+      enlazarDpadSnake('btn-right', 1, 0);
+
+      // Deslizamiento táctil (Swipe)
+      let touchStartX = 0;
+      let touchStartY = 0;
+      canvas.addEventListener('touchstart', (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+        touchStartY = e.changedTouches[0].screenY;
+      }, { passive: true });
+
+      canvas.addEventListener('touchend', (e) => {
+        const diffX = e.changedTouches[0].screenX - touchStartX;
+        const diffY = e.changedTouches[0].screenY - touchStartY;
+        if (Math.abs(diffX) > Math.abs(diffY)) {
+          if (diffX > 25) cambiarDireccion(1, 0);
+          else if (diffX < -25) cambiarDireccion(-1, 0);
+        } else {
+          if (diffY > 25) cambiarDireccion(0, 1);
+          else if (diffY < -25) cambiarDireccion(0, -1);
+        }
+      }, { passive: true });
+    }
+
+    function cicloJuego() {
+      if (!jugando) return;
+
+      direccion = siguienteDireccion;
+      const cabeza = {
+        x: serpiente[0].x + direccion.x,
+        y: serpiente[0].y + direccion.y
+      };
+
+      // 1. Choque contra paredes
+      if (cabeza.x < 0 || cabeza.x >= GRID || cabeza.y < 0 || cabeza.y >= GRID) {
+        morir();
+        return;
+      }
+
+      // 2. Choque contra su propio cuerpo
+      if (serpiente.some(seg => seg.x === cabeza.x && seg.y === cabeza.y)) {
+        morir();
+        return;
+      }
+
+      // Insertar nueva cabeza
+      serpiente.unshift(cabeza);
+
+      // 3. Comer comida
+      if (cabeza.x === comida.x && cabeza.y === comida.y) {
+        puntos += 10;
+        statPuntos.textContent = puntos;
+        if (typeof sonidos !== 'undefined') sonidos.punto();
+
+        generarComida();
+
+        // Subir velocidad suavemente
+        if (puntos % 30 === 0 && velocidadMs > 65) {
+          velocidadMs -= 5;
+          clearInterval(loopInterval);
+          loopInterval = setInterval(cicloJuego, velocidadMs);
+        }
+      } else {
+        serpiente.pop(); // Quitar cola
+      }
+
+      dibujar();
+    }
+
+    function morir() {
+      jugando = false;
+      clearInterval(loopInterval);
+      if (typeof sonidos !== 'undefined') sonidos.golpe();
+
+      if (puntos > recordPuntos) {
+        recordPuntos = puntos;
+        statRecord.textContent = recordPuntos;
+      }
+
+      transicion.mostrarGameOver({
+        puntos: puntos,
+        record: recordPuntos,
+        onReintentar: () => iniciarPartida(),
+        urlMenu: '../index.html'
+      });
+    }
+
+    function dibujar() {
+      // Fondo cuadriculado retro
+      ctx.fillStyle = '#060511';
+      ctx.fillRect(0, 0, 400, 400);
+
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= GRID; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * TILE_SIZE, 0);
+        ctx.lineTo(i * TILE_SIZE, 400);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(0, i * TILE_SIZE);
+        ctx.lineTo(400, i * TILE_SIZE);
+        ctx.stroke();
+      }
+
+      // Comida (Manzana pixelada roja neón con brillo)
+      ctx.fillStyle = '#ff0055';
+      ctx.shadowColor = '#ff0055';
+      ctx.shadowBlur = 10;
+      ctx.fillRect(comida.x * TILE_SIZE + 2, comida.y * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+      ctx.fillStyle = '#39ff14';
+      ctx.fillRect(comida.x * TILE_SIZE + 8, comida.y * TILE_SIZE, 4, 3); // Hoja
+
+      // Serpiente (Verde neón)
+      serpiente.forEach((seg, index) => {
+        if (index === 0) {
+          // Cabeza
+          ctx.fillStyle = '#ffe600';
+          ctx.shadowColor = '#ffe600';
+          ctx.shadowBlur = 12;
+        } else {
+          // Cuerpo
+          ctx.fillStyle = '#39ff14';
+          ctx.shadowColor = '#39ff14';
+          ctx.shadowBlur = 6;
+        }
+        ctx.fillRect(seg.x * TILE_SIZE + 1, seg.y * TILE_SIZE + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+      });
+
+      ctx.shadowBlur = 0;
+    }
+
+    dibujar();
+  </script>
+</body>
+</html>

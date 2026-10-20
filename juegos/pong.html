@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Pong Retro - Retro Arcade</title>
+  <link rel="stylesheet" href="../css/estilos.css">
+  <link rel="stylesheet" href="../css/movil.css">
+  <style>
+    .pong-canvas-wrap {
+      width: min(94vw, 720px);
+      aspect-ratio: 4 / 3;
+      max-height: calc(100vh - 220px);
+      position: relative;
+      background: #000;
+      border: 4px solid var(--neon-cyan);
+      box-shadow: 0 0 25px var(--neon-cyan-glow);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #pong-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+    }
+
+    .difficulty-selector {
+      display: flex;
+      gap: 10px;
+      margin: 12px 0;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .btn-diff {
+      font-size: 0.65rem;
+      padding: 10px 16px;
+    }
+
+    .btn-diff.selected {
+      background: var(--neon-cyan);
+      color: #000;
+      box-shadow: 0 0 15px var(--neon-cyan-glow);
+    }
+  </style>
+</head>
+<body>
+  <!-- Filtro CRT -->
+  <div class="crt-overlay" aria-hidden="true"></div>
+
+  <!-- Barra de controles -->
+  <header class="top-controls">
+    <button type="button" class="btn-icon-arcade" id="btn-toggle-sonido" title="Sonido">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+    </button>
+  </header>
+
+  <main class="game-container">
+    <div class="game-top-bar">
+      <button type="button" class="btn-arcade btn-arcade-cyan" id="btn-back-menu" style="padding: 8px 14px; font-size: 0.65rem;">
+        &lt; MENÚ
+      </button>
+
+      <div class="game-stats">
+        <div class="stat-item">JUGADOR: <span id="score-p1" style="color: var(--neon-cyan);">0</span></div>
+        <div class="stat-item">VS</div>
+        <div class="stat-item">CPU: <span id="score-cpu" style="color: var(--neon-magenta);">0</span></div>
+      </div>
+    </div>
+
+    <!-- Pantalla Arcade -->
+    <div class="arcade-screen" style="padding: 10px;">
+      <!-- Overlay de Inicio -->
+      <div class="game-start-overlay" id="overlay-start">
+        <div class="start-icon" style="margin-bottom: 8px;">
+          <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
+            <rect x="8" y="16" width="6" height="32" rx="2" fill="#00f0ff"/>
+            <rect x="50" y="24" width="6" height="32" rx="2" fill="#ff007f"/>
+            <rect x="28" y="28" width="8" height="8" rx="1" fill="#ffe600"/>
+            <line x1="32" y1="8" x2="32" y2="56" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-dasharray="4 4"/>
+          </svg>
+        </div>
+        <h1 class="game-title-big">PONG RETRO</h1>
+        <p class="game-instructions">
+          MUEVE TU PALETA (RATÓN, TOQUE O FLECHAS W/S O ARRIBA/ABAJO). ¡EL PRIMERO EN ANOTAR 5 PUNTOS GANA!
+        </p>
+
+        <div style="font-size: 0.7rem; color: var(--neon-yellow); margin-top: 6px;">DIFICULTAD:</div>
+        <div class="difficulty-selector">
+          <button type="button" class="btn-arcade btn-arcade-cyan btn-diff selected" data-diff="facil">FÁCIL</button>
+          <button type="button" class="btn-arcade btn-arcade-yellow btn-diff" data-diff="medio">MEDIO</button>
+          <button type="button" class="btn-arcade btn-arcade-magenta btn-diff" data-diff="dificil">DIFÍCIL</button>
+        </div>
+
+        <button type="button" class="btn-arcade btn-arcade-green blink-text" id="btn-start-pong" style="margin-top: 10px;">
+          > START
+        </button>
+      </div>
+
+      <!-- Canvas de Pong -->
+      <div class="pong-canvas-wrap">
+        <canvas id="pong-canvas" width="800" height="600"></canvas>
+      </div>
+    </div>
+  </main>
+
+  <script src="../js/sonidos.js"></script>
+  <script src="../js/transiciones.js"></script>
+  <script src="../js/movil.js"></script>
+
+  <script>
+    /* ==========================================================================
+       CONSTANTES CONFIGURABLES DE BALANCE PONG (Dificultad, Velocidad, Errores)
+       ========================================================================== */
+    const BOLA_VELOCIDAD_INICIAL = {
+      facil: 4.8,   // Pelota un poco más rápida
+      medio: 5.8,
+      dificil: 7.0
+    };
+
+    const BOLA_ACELERACION_REBOTE = {
+      facil: 0.14,  // Acelera un poco más en cada rebote
+      medio: 0.26,
+      dificil: 0.42
+    };
+
+    const AJUSTES_DIF = {
+      facil: {
+        cpuSpeed: 2.7,      // ~35% más de velocidad (antes 2.0)
+        error: 48,          // Margen de error reducido (antes 85)
+        retrasoFrames: 3    // Retraso de reacción reducido (antes 6)
+      },
+      medio: {
+        cpuSpeed: 4.2,
+        error: 22,
+        retrasoFrames: 1
+      },
+      dificil: {
+        cpuSpeed: 5.8,
+        error: 6,
+        retrasoFrames: 0
+      }
+    };
+
+    const canvas = document.getElementById('pong-canvas');
+    const ctx = canvas.getContext('2d');
+
+    const scoreP1El = document.getElementById('score-p1');
+    const scoreCpuEl = document.getElementById('score-cpu');
+    const overlayStart = document.getElementById('overlay-start');
+    const btnStart = document.getElementById('btn-start-pong');
+    const btnBackMenu = document.getElementById('btn-back-menu');
+
+    let dificultad = 'facil'; // Nivel fácil seleccionado por defecto
+    let puntosP1 = 0;
+    let puntosCpu = 0;
+    const PUNTOS_VICTORIA = 5;
+    let loopId = null;
+    let juegoActivo = false;
+    let iaFrameContador = 0;
+
+    // Dimensiones lógicas
+    const W = 800;
+    const H = 600;
+
+    const paletaAlto = 90;
+    const paletaAncho = 16;
+
+    // Paletas
+    const p1 = { x: 25, y: H / 2 - paletaAlto / 2, vy: 0 };
+    const cpu = { x: W - 25 - paletaAncho, y: H / 2 - paletaAlto / 2, speed: 2.0, errorMargin: 85 };
+
+    // Pelota
+    const bola = {
+      x: W / 2,
+      y: H / 2,
+      radio: 10,
+      vx: 4.2,
+      vy: 2.5,
+      speed: 4.2
+    };
+
+    // Selección de Dificultad
+    document.querySelectorAll('.btn-diff').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (typeof sonidos !== 'undefined') sonidos.bip();
+        document.querySelectorAll('.btn-diff').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        dificultad = btn.getAttribute('data-diff');
+      });
+    });
+
+    btnBackMenu.addEventListener('click', () => {
+      transicion.irA('../index.html');
+    });
+
+    btnStart.addEventListener('click', () => {
+      transicion.iniciarCarga(() => {
+        overlayStart.classList.add('oculto');
+        iniciarPartida();
+      });
+    });
+
+    function iniciarPartida() {
+      puntosP1 = 0;
+      puntosCpu = 0;
+      actualizarMarcador();
+
+      const conf = AJUSTES_DIF[dificultad];
+      cpu.speed = conf.cpuSpeed;
+      cpu.errorMargin = conf.error;
+
+      resetPelota(1);
+      juegoActivo = true;
+      if (loopId) cancelAnimationFrame(loopId);
+      bucleJuego();
+    }
+
+    function resetPelota(direccion = 1) {
+      bola.x = W / 2;
+      bola.y = H / 2;
+      bola.speed = BOLA_VELOCIDAD_INICIAL[dificultad];
+      const angle = (Math.random() * Math.PI / 3) - (Math.PI / 6); // Entre -30° y +30°
+      bola.vx = direccion * bola.speed * Math.cos(angle);
+      bola.vy = bola.speed * Math.sin(angle);
+    }
+
+    function actualizarMarcador() {
+      scoreP1El.textContent = puntosP1;
+      scoreCpuEl.textContent = puntosCpu;
+    }
+
+    // Controles de jugador (Ratón, Pointer y Toque fluido)
+    function moverPaletaConEvento(clientY) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleY = H / rect.height;
+      const posY = (clientY - rect.top) * scaleY;
+      p1.y = Math.max(0, Math.min(H - paletaAlto, posY - paletaAlto / 2));
+    }
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (e.buttons > 0 || e.pointerType === 'mouse' || e.pointerType === 'touch') {
+        moverPaletaConEvento(e.clientY);
+      }
+    });
+
+    canvas.addEventListener('pointerdown', (e) => {
+      try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+      moverPaletaConEvento(e.clientY);
+    });
+
+    canvas.addEventListener('pointerup', (e) => {
+      try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+    });
+
+    // Flechas de teclado
+    const teclas = {};
+    window.addEventListener('keydown', (e) => {
+      teclas[e.key] = true;
+      if (['ArrowUp', 'ArrowDown'].includes(e.key)) e.preventDefault();
+    });
+    window.addEventListener('keyup', (e) => {
+      teclas[e.key] = false;
+    });
+
+    function bucleJuego() {
+      if (!juegoActivo) return;
+
+      // 1. Teclado P1
+      if (teclas['ArrowUp'] || teclas['w'] || teclas['W']) {
+        p1.y = Math.max(0, p1.y - 7);
+      }
+      if (teclas['ArrowDown'] || teclas['s'] || teclas['S']) {
+        p1.y = Math.min(H - paletaAlto, p1.y + 7);
+      }
+
+      // 2. IA de la Computadora (Con retraso y margen de error)
+      iaFrameContador++;
+      const confIa = AJUSTES_DIF[dificultad];
+      if (iaFrameContador >= (confIa.retrasoFrames || 1)) {
+        iaFrameContador = 0;
+        const debeSeguir = dificultad === 'dificil' || bola.vx > 0 || bola.x > W * 0.35;
+        if (debeSeguir) {
+          const oscilacion = Math.sin(Date.now() / 260) * cpu.errorMargin;
+          const targetY = bola.y - paletaAlto / 2 + oscilacion;
+          if (cpu.y < targetY - 6) {
+            cpu.y += cpu.speed;
+          } else if (cpu.y > targetY + 6) {
+            cpu.y -= cpu.speed;
+          }
+        }
+      }
+      cpu.y = Math.max(0, Math.min(H - paletaAlto, cpu.y));
+
+      // 3. Movimiento de la pelota
+      bola.x += bola.vx;
+      bola.y += bola.vy;
+
+      // Rebote superior e inferior
+      if (bola.y - bola.radio <= 0) {
+        bola.y = bola.radio;
+        bola.vy = Math.abs(bola.vy);
+        if (typeof sonidos !== 'undefined') sonidos.bip();
+      } else if (bola.y + bola.radio >= H) {
+        bola.y = H - bola.radio;
+        bola.vy = -Math.abs(bola.vy);
+        if (typeof sonidos !== 'undefined') sonidos.bip();
+      }
+
+      // 4. Colisión con Paleta P1
+      if (
+        bola.x - bola.radio <= p1.x + paletaAncho &&
+        bola.x + bola.radio >= p1.x &&
+        bola.y >= p1.y &&
+        bola.y <= p1.y + paletaAlto &&
+        bola.vx < 0
+      ) {
+        const impacto = (bola.y - (p1.y + paletaAlto / 2)) / (paletaAlto / 2);
+        const maxAngle = Math.PI / 3; // 60 grados
+        const rad = impacto * maxAngle;
+
+        const acel = BOLA_ACELERACION_REBOTE[dificultad] || 0.15;
+        bola.speed = Math.min(bola.speed + acel, 14);
+        bola.vx = bola.speed * Math.cos(rad);
+        bola.vy = bola.speed * Math.sin(rad);
+        bola.x = p1.x + paletaAncho + bola.radio;
+        if (typeof sonidos !== 'undefined') sonidos.click();
+      }
+
+      // 5. Colisión con Paleta CPU
+      if (
+        bola.x + bola.radio >= cpu.x &&
+        bola.x - bola.radio <= cpu.x + paletaAncho &&
+        bola.y >= cpu.y &&
+        bola.y <= cpu.y + paletaAlto &&
+        bola.vx > 0
+      ) {
+        const impacto = (bola.y - (cpu.y + paletaAlto / 2)) / (paletaAlto / 2);
+        const maxAngle = Math.PI / 3;
+        const rad = impacto * maxAngle;
+
+        const acel = BOLA_ACELERACION_REBOTE[dificultad] || 0.15;
+        bola.speed = Math.min(bola.speed + acel, 14);
+        bola.vx = -bola.speed * Math.cos(rad);
+        bola.vy = bola.speed * Math.sin(rad);
+        bola.x = cpu.x - bola.radio;
+        if (typeof sonidos !== 'undefined') sonidos.click();
+      }
+
+      // 6. Punto para CPU
+      if (bola.x < 0) {
+        puntosCpu++;
+        actualizarMarcador();
+        if (typeof sonidos !== 'undefined') sonidos.golpe();
+        verificarFinPartida(-1);
+      }
+      // 7. Punto para Jugador
+      else if (bola.x > W) {
+        puntosP1++;
+        actualizarMarcador();
+        if (typeof sonidos !== 'undefined') sonidos.punto();
+        verificarFinPartida(1);
+      }
+
+      // 8. Renderizado
+      dibujar();
+
+      if (juegoActivo) {
+        loopId = requestAnimationFrame(bucleJuego);
+      }
+    }
+
+    function verificarFinPartida(ultimoSentido) {
+      if (puntosP1 >= PUNTOS_VICTORIA) {
+        juegoActivo = false;
+        transicion.mostrarVictoria({
+          titulo: '¡GANASTE EL PARTIDO!',
+          lineasInfo: [
+            { label: 'TU PUNTAJE', valor: puntosP1 },
+            { label: 'CPU', valor: puntosCpu },
+            { label: 'DIFICULTAD', valor: dificultad.toUpperCase() }
+          ],
+          onReintentar: () => iniciarPartida(),
+          urlMenu: '../index.html'
+        });
+      } else if (puntosCpu >= PUNTOS_VICTORIA) {
+        juegoActivo = false;
+        transicion.mostrarGameOver({
+          puntos: puntosP1,
+          record: null,
+          onReintentar: () => iniciarPartida(),
+          urlMenu: '../index.html'
+        });
+      } else {
+        resetPelota(-ultimoSentido);
+      }
+    }
+
+    function dibujar() {
+      // Fondo
+      ctx.fillStyle = '#05040d';
+      ctx.fillRect(0, 0, W, H);
+
+      // Línea central punteada
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.lineWidth = 4;
+      ctx.setLineDash([16, 14]);
+      ctx.beginPath();
+      ctx.moveTo(W / 2, 0);
+      ctx.lineTo(W / 2, H);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Paleta Jugador (Cian)
+      ctx.fillStyle = '#00f0ff';
+      ctx.shadowColor = '#00f0ff';
+      ctx.shadowBlur = 15;
+      ctx.fillRect(p1.x, p1.y, paletaAncho, paletaAlto);
+
+      // Paleta CPU (Magenta)
+      ctx.fillStyle = '#ff007f';
+      ctx.shadowColor = '#ff007f';
+      ctx.shadowBlur = 15;
+      ctx.fillRect(cpu.x, cpu.y, paletaAncho, paletaAlto);
+
+      // Pelota (Amarillo neón)
+      ctx.fillStyle = '#ffe600';
+      ctx.shadowColor = '#ffe600';
+      ctx.shadowBlur = 15;
+      ctx.beginPath();
+      ctx.arc(bola.x, bola.y, bola.radio, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Reset sombra
+      ctx.shadowBlur = 0;
+    }
+
+    // Dibujo inicial
+    dibujar();
+  </script>
+</body>
+</html>

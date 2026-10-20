@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Carrera de Clics 1 vs 1 - Retro Arcade</title>
+  <link rel="stylesheet" href="../css/estilos.css">
+  <link rel="stylesheet" href="../css/movil.css">
+  
+  <style>
+    :root {
+      --color-j1: #ff007f;
+      --color-j1-glow: rgba(255, 0, 127, 0.55);
+      
+      --color-j2: #00f0ff;
+      --color-j2-glow: rgba(0, 240, 255, 0.55);
+
+      --accent-gold: #ffe600;
+    }
+
+    body {
+      background-color: #070714;
+      color: #fff;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Botón flotante para regresar al Menú */
+    .btn-floating-menu {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      z-index: 50;
+    }
+
+    /* Cabecera superior */
+    .top-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      z-index: 20;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      pointer-events: none;
+    }
+
+    /* Marcador acumulado */
+    .victories-banner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      background: #09081a;
+      border: 2px solid var(--neon-yellow);
+      padding: 6px 18px;
+      border-radius: 4px;
+      font-size: clamp(0.62rem, 1.4vw, 0.8rem);
+      box-shadow: 0 0 15px var(--neon-yellow-glow);
+    }
+
+    .victories-j1 { color: var(--color-j1); }
+    .victories-j2 { color: var(--color-j2); }
+    .victories-vs { color: var(--accent-gold); }
+
+    /* Barra Tira y Afloja */
+    .tug-of-war-container {
+      width: min(92%, 580px);
+      height: 18px;
+      background: #110e26;
+      border: 3px solid #fff;
+      border-radius: 4px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+    }
+
+    .tug-bar-j1 {
+      height: 100%;
+      background: var(--color-j1);
+      width: 50%;
+      float: left;
+      transition: width 0.1s linear;
+      box-shadow: inset 0 0 8px rgba(0,0,0,0.5);
+    }
+
+    .tug-bar-j2 {
+      height: 100%;
+      background: var(--color-j2);
+      width: 50%;
+      float: right;
+      transition: width 0.1s linear;
+      box-shadow: inset 0 0 8px rgba(0,0,0,0.5);
+    }
+
+    .tug-pin {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 12px;
+      z-index: 2;
+    }
+
+    /* Temporizador Flotante */
+    .timer-badge {
+      position: absolute;
+      top: 68px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 25;
+      background: #09081a;
+      border: 3px solid var(--accent-gold);
+      padding: 6px 20px;
+      border-radius: 4px;
+      box-shadow: 0 0 20px var(--neon-yellow-glow);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .timer-badge.urgent {
+      border-color: #ff0055;
+      animation: pulseUrgent 0.4s infinite alternate;
+    }
+
+    @keyframes pulseUrgent {
+      from { transform: translateX(-50%) scale(1); box-shadow: 0 0 15px #ff0055; }
+      to { transform: translateX(-50%) scale(1.12); box-shadow: 0 0 30px #ff0055; }
+    }
+
+    .timer-label {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+    }
+
+    .timer-value {
+      font-size: clamp(1.2rem, 2.8vw, 1.8rem);
+      color: #fff;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Arena 1 vs 1 */
+    .arena {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: row;
+      position: relative;
+    }
+
+    .player-zone {
+      flex: 1;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      position: relative;
+    }
+
+    .player-1 {
+      background: radial-gradient(circle at 30% 50%, #290013 0%, #070714 85%);
+      border-right: 3px solid var(--color-j1);
+    }
+
+    .player-2 {
+      background: radial-gradient(circle at 70% 50%, #002229 0%, #070714 85%);
+      border-left: 3px solid var(--color-j2);
+    }
+
+    .player-title {
+      font-size: clamp(1rem, 2.5vw, 1.8rem);
+      margin-bottom: 6px;
+    }
+
+    .player-1 .player-title {
+      color: var(--color-j1);
+      text-shadow: 0 0 14px var(--color-j1-glow);
+    }
+
+    .player-2 .player-title {
+      color: var(--color-j2);
+      text-shadow: 0 0 14px var(--color-j2-glow);
+    }
+
+    .key-badge {
+      font-size: clamp(0.6rem, 1.2vw, 0.75rem);
+      background: #000;
+      border: 2px solid #fff;
+      padding: 4px 10px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-bottom: 16px;
+    }
+
+    .key-badge span {
+      color: var(--neon-yellow);
+    }
+
+    /* Contador */
+    .score-number {
+      font-size: clamp(3.8rem, 10vw, 7rem);
+      line-height: 1;
+      margin-bottom: 20px;
+      transition: transform 0.08s;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .player-1 .score-number {
+      color: #fff;
+      text-shadow: 0 0 25px var(--color-j1);
+    }
+
+    .player-2 .score-number {
+      color: #fff;
+      text-shadow: 0 0 25px var(--color-j2);
+    }
+
+    /* Botón Gigante de Clic */
+    .click-button {
+      width: min(80vw, 300px);
+      height: min(25vh, 140px);
+      border: 4px solid #fff;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: clamp(0.9rem, 2.2vw, 1.3rem);
+      color: #fff;
+      text-transform: uppercase;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      z-index: 10;
+      touch-action: manipulation;
+      transition: transform 0.07s, box-shadow 0.07s;
+    }
+
+    .player-1 .click-button {
+      background: #38001a;
+      border-color: var(--color-j1);
+      box-shadow: 0 8px 0 #80003f, 0 0 25px var(--color-j1-glow);
+    }
+
+    .player-2 .click-button {
+      background: #002e38;
+      border-color: var(--color-j2);
+      box-shadow: 0 8px 0 #006073, 0 0 25px var(--color-j2-glow);
+    }
+
+    .click-button:active,
+    .click-button.pressed {
+      transform: translateY(6px);
+      box-shadow: 0 2px 0 rgba(0,0,0,0.8) !important;
+    }
+
+    .btn-subtext {
+      font-size: 0.58rem;
+      color: var(--text-muted);
+    }
+
+    .pop {
+      animation: popAnim 0.1s ease-out;
+    }
+    @keyframes popAnim {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.18); }
+      100% { transform: scale(1); }
+    }
+
+    .floating-plus {
+      position: absolute;
+      color: #ffe600;
+      font-size: 1.4rem;
+      pointer-events: none;
+      z-index: 15;
+      text-shadow: 0 0 10px #ffe600;
+      animation: floatUp 0.5s ease-out forwards;
+    }
+
+    @keyframes floatUp {
+      0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, -90px) scale(1.4); }
+    }
+
+    /* Modal retro de Inicio */
+    .overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(3, 2, 10, 0.94);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+
+    .overlay.active {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .modal-card {
+      background: #0d0b21;
+      border: 4px solid var(--neon-cyan);
+      box-shadow: 0 0 35px var(--neon-cyan-glow);
+      padding: clamp(24px, 4vw, 36px);
+      width: min(94vw, 620px);
+      text-align: center;
+      border-radius: 6px;
+    }
+
+    .game-logo {
+      font-size: clamp(1.2rem, 3.2vw, 2.2rem);
+      color: var(--neon-yellow);
+      text-shadow: 0 0 15px var(--neon-yellow-glow);
+      line-height: 1.3;
+      margin-bottom: 12px;
+    }
+
+    .instructions-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin: 18px 0;
+    }
+
+    .instruction-card {
+      background: #000;
+      padding: 12px 10px;
+      border-radius: 4px;
+      font-size: 0.65rem;
+      line-height: 1.6;
+    }
+
+    .instruction-card.j1 { border: 2px solid var(--color-j1); color: var(--color-j1); }
+    .instruction-card.j2 { border: 2px solid var(--color-j2); color: var(--color-j2); }
+
+    /* Canvas Confeti */
+    #confetti-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 150;
+    }
+
+    /* Responsive móvil vertical */
+    @media (orientation: portrait), (max-width: 768px) {
+      .arena { flex-direction: column; }
+      .player-1 { border-right: none; border-bottom: 3px solid var(--color-j1); }
+      .player-2 { border-left: none; border-top: 3px solid var(--color-j2); }
+      .timer-badge { top: 50%; transform: translate(-50%, -50%); }
+      .score-number { margin-bottom: 8px; }
+      .click-button { width: min(85vw, 280px); height: min(18vh, 110px); }
+    }
+  </style>
+</head>
+<body>
+  <!-- Filtro CRT -->
+  <div class="crt-overlay" aria-hidden="true"></div>
+
+  <!-- Botón de retorno al menú -->
+  <button type="button" class="btn-arcade btn-arcade-cyan btn-floating-menu" id="btn-back-menu" style="padding: 8px 14px; font-size: 0.65rem;">
+    &lt; MENÚ
+  </button>
+
+  <header class="top-bar">
+    <div class="victories-banner">
+      <span class="victories-j1">J1: <span id="v-count-j1">0</span> [W]</span>
+      <span class="victories-vs">VS</span>
+      <span class="victories-j2">[W] <span id="v-count-j2">0</span> :J2</span>
+    </div>
+
+    <div class="tug-of-war-container">
+      <div class="tug-bar-j1" id="tug-bar-j1"></div>
+      <div class="tug-bar-j2" id="tug-bar-j2"></div>
+      <span class="tug-pin">|</span>
+    </div>
+  </header>
+
+  <!-- Temporizador -->
+  <div class="timer-badge" id="timer-badge">
+    <span class="timer-label">TIEMPO</span>
+    <span class="timer-value" id="timer-display">10.0</span>
+  </div>
+
+  <!-- Arena 1 vs 1 -->
+  <main class="arena" id="arena">
+    <section class="player-zone player-1" id="zone-j1">
+      <h2 class="player-title">JUGADOR 1</h2>
+      <div class="key-badge">TECLA: <span>[A]</span></div>
+      <div class="score-number" id="score-j1">0</div>
+      <button type="button" class="click-button" id="btn-click-j1">
+        <span>¡CLIC!</span>
+        <span class="btn-subtext">O PULSA "A"</span>
+      </button>
+    </section>
+
+    <section class="player-zone player-2" id="zone-j2">
+      <h2 class="player-title">JUGADOR 2</h2>
+      <div class="key-badge">TECLA: <span>[L]</span></div>
+      <div class="score-number" id="score-j2">0</div>
+      <button type="button" class="click-button" id="btn-click-j2">
+        <span>¡CLIC!</span>
+        <span class="btn-subtext">O PULSA "L"</span>
+      </button>
+    </section>
+  </main>
+
+  <!-- Modal Inicio -->
+  <div class="overlay active" id="modal-start">
+    <div class="modal-card">
+      <h1 class="game-logo">CARRERA DE CLICS<br>1 VS 1</h1>
+      <p style="font-size: 0.65rem; color: var(--neon-cyan);">¡DUELO DE VELOCIDAD RETRO ARCADE!</p>
+
+      <div class="instructions-grid">
+        <div class="instruction-card j1">
+          <b>JUGADOR 1</b><br>TECLA [A] O BOTÓN MAGENTA
+        </div>
+        <div class="instruction-card j2">
+          <b>JUGADOR 2</b><br>TECLA [L] O BOTÓN CIAN
+        </div>
+      </div>
+
+      <button type="button" class="btn-arcade btn-arcade-green blink-text" id="btn-start-game" style="font-size: 0.95rem; width: 100%;">
+        > START GAME &lt;
+      </button>
+    </div>
+  </div>
+
+  <!-- Modal Cuenta Regresiva -->
+  <div class="overlay" id="modal-countdown" style="background: rgba(3, 2, 10, 0.96);">
+    <div class="countdown-text" id="countdown-number" style="font-size: clamp(4rem, 16vw, 9rem); color: var(--neon-yellow); text-shadow: 0 0 30px var(--neon-yellow-glow);">3</div>
+  </div>
+
+  <canvas id="confetti-canvas"></canvas>
+
+  <script src="../js/sonidos.js"></script>
+  <script src="../js/transiciones.js"></script>
+  <script src="../js/movil.js"></script>
+
+  <script>
+    /* Aviso retro "GIRA EL CELULAR" en horizontal (este juego se juega en vertical) */
+    if (window.RetroMovil) new RetroMovil.OrientationGuard('portrait');
+
+    /* ==========================================================================
+       LÓGICA CARRERA DE CLICS 1 VS 1 RETRO ARCADE
+       ========================================================================== */
+    const CONFIG = {
+      DURACION_NORMAL: 10,
+      DURACION_DESEMPATE: 5,
+      TECLA_J1: 'KeyA',
+      TECLA_J2: 'KeyL'
+    };
+
+    const state = {
+      puntosJ1: 0,
+      puntosJ2: 0,
+      victoriasJ1: 0,
+      victoriasJ2: 0,
+      enJuego: false,
+      tiempoRestante: 0,
+      timerInterval: null,
+      duracionActual: CONFIG.DURACION_NORMAL,
+      teclaJ1Presionada: false,
+      teclaJ2Presionada: false
+    };
+
+    const DOM = {
+      scoreJ1: document.getElementById('score-j1'),
+      scoreJ2: document.getElementById('score-j2'),
+      vCountJ1: document.getElementById('v-count-j1'),
+      vCountJ2: document.getElementById('v-count-j2'),
+      btnClickJ1: document.getElementById('btn-click-j1'),
+      btnClickJ2: document.getElementById('btn-click-j2'),
+      zoneJ1: document.getElementById('zone-j1'),
+      zoneJ2: document.getElementById('zone-j2'),
+      tugBarJ1: document.getElementById('tug-bar-j1'),
+      tugBarJ2: document.getElementById('tug-bar-j2'),
+      timerDisplay: document.getElementById('timer-display'),
+      timerBadge: document.getElementById('timer-badge'),
+      modalStart: document.getElementById('modal-start'),
+      modalCountdown: document.getElementById('modal-countdown'),
+      countdownNumber: document.getElementById('countdown-number'),
+      btnStart: document.getElementById('btn-start-game'),
+      btnBackMenu: document.getElementById('btn-back-menu')
+    };
+
+    // Botón Menú
+    DOM.btnBackMenu.addEventListener('click', () => {
+      transicion.irA('../index.html');
+    });
+
+    DOM.btnStart.addEventListener('click', () => {
+      iniciarCuentaRegresiva(CONFIG.DURACION_NORMAL);
+    });
+
+    function iniciarCuentaRegresiva(duracion) {
+      state.duracionActual = duracion;
+      DOM.modalStart.classList.remove('active');
+
+      state.puntosJ1 = 0;
+      state.puntosJ2 = 0;
+      actualizarMarcadores();
+      actualizarTiraYAfloja();
+
+      DOM.timerDisplay.textContent = state.duracionActual.toFixed(1);
+      DOM.timerBadge.classList.remove('urgent');
+      DOM.modalCountdown.classList.add('active');
+
+      let cuenta = 3;
+      ejecutarPaso(cuenta);
+    }
+
+    function ejecutarPaso(c) {
+      if (c > 0) {
+        DOM.countdownNumber.textContent = c;
+        if (typeof sonidos !== 'undefined') sonidos.beepCuenta();
+        setTimeout(() => ejecutarPaso(c - 1), 900);
+      } else {
+        DOM.countdownNumber.textContent = '¡YA!';
+        if (typeof sonidos !== 'undefined') sonidos.beepGo();
+        setTimeout(() => {
+          DOM.modalCountdown.classList.remove('active');
+          comenzarPartida();
+        }, 700);
+      }
+    }
+
+    function comenzarPartida() {
+      state.enJuego = true;
+      const startTime = performance.now();
+      const duracionMs = state.duracionActual * 1000;
+
+      if (state.timerInterval) clearInterval(state.timerInterval);
+
+      state.timerInterval = setInterval(() => {
+        const transcurrido = performance.now() - startTime;
+        const restanteMs = Math.max(0, duracionMs - transcurrido);
+        state.tiempoRestante = restanteMs / 1000;
+
+        DOM.timerDisplay.textContent = state.tiempoRestante.toFixed(1);
+
+        if (state.tiempoRestante <= 3.0) {
+          DOM.timerBadge.classList.add('urgent');
+        }
+
+        if (restanteMs <= 0) {
+          clearInterval(state.timerInterval);
+          state.timerInterval = null;
+          finalizarPartida();
+        }
+      }, 50);
+    }
+
+    function finalizarPartida() {
+      state.enJuego = false;
+      DOM.timerBadge.classList.remove('urgent');
+
+      if (state.puntosJ1 > state.puntosJ2) {
+        state.victoriasJ1++;
+        DOM.vCountJ1.textContent = state.victoriasJ1;
+        transicion.mostrarVictoria({
+          titulo: '¡JUGADOR 1 GANA!',
+          lineasInfo: [
+            { label: 'JUGADOR 1', valor: state.puntosJ1 },
+            { label: 'JUGADOR 2', valor: state.puntosJ2 }
+          ],
+          onReintentar: () => iniciarCuentaRegresiva(CONFIG.DURACION_NORMAL),
+          urlMenu: '../index.html'
+        });
+      } else if (state.puntosJ2 > state.puntosJ1) {
+        state.victoriasJ2++;
+        DOM.vCountJ2.textContent = state.victoriasJ2;
+        transicion.mostrarVictoria({
+          titulo: '¡JUGADOR 2 GANA!',
+          lineasInfo: [
+            { label: 'JUGADOR 2', valor: state.puntosJ2 },
+            { label: 'JUGADOR 1', valor: state.puntosJ1 }
+          ],
+          onReintentar: () => iniciarCuentaRegresiva(CONFIG.DURACION_NORMAL),
+          urlMenu: '../index.html'
+        });
+      } else {
+        // Empate -> ofrecer desempate 5 segundos
+        if (typeof sonidos !== 'undefined') sonidos.bip();
+        transicion.mostrarGameOver({
+          puntos: `EMPATE ${state.puntosJ1} - ${state.puntosJ2}`,
+          record: null,
+          onReintentar: () => iniciarCuentaRegresiva(CONFIG.DURACION_DESEMPATE),
+          urlMenu: '../index.html'
+        });
+        const btnRetry = document.getElementById('btn-gameover-retry');
+        if (btnRetry) btnRetry.textContent = '> DESEMPATE (5s)';
+      }
+    }
+
+    function sumarPuntoJ1(e) {
+      if (!state.enJuego) return;
+      state.puntosJ1++;
+      if (typeof sonidos !== 'undefined') sonidos.bip();
+      animar(DOM.scoreJ1, DOM.btnClickJ1, e);
+      actualizarMarcadores();
+      actualizarTiraYAfloja();
+    }
+
+    function sumarPuntoJ2(e) {
+      if (!state.enJuego) return;
+      state.puntosJ2++;
+      if (typeof sonidos !== 'undefined') sonidos.click();
+      animar(DOM.scoreJ2, DOM.btnClickJ2, e);
+      actualizarMarcadores();
+      actualizarTiraYAfloja();
+    }
+
+    function actualizarMarcadores() {
+      DOM.scoreJ1.textContent = state.puntosJ1;
+      DOM.scoreJ2.textContent = state.puntosJ2;
+    }
+
+    function actualizarTiraYAfloja() {
+      const total = state.puntosJ1 + state.puntosJ2;
+      let pct = 50;
+      if (total > 0) {
+        pct = (state.puntosJ1 / total) * 100;
+        pct = Math.min(Math.max(pct, 10), 90);
+      }
+      DOM.tugBarJ1.style.width = pct.toFixed(1) + '%';
+      DOM.tugBarJ2.style.width = (100 - pct).toFixed(1) + '%';
+    }
+
+    function animar(numEl, btnEl, ev) {
+      numEl.classList.remove('pop');
+      void numEl.offsetWidth;
+      numEl.classList.add('pop');
+
+      btnEl.classList.add('pressed');
+      setTimeout(() => btnEl.classList.remove('pressed'), 70);
+
+      // Partícula +1
+      const p = document.createElement('div');
+      p.className = 'floating-plus';
+      p.textContent = '+1';
+
+      const rect = btnEl.getBoundingClientRect();
+      p.style.left = (rect.left + rect.width / 2) + 'px';
+      p.style.top = (rect.top + rect.height / 2) + 'px';
+      document.body.appendChild(p);
+      setTimeout(() => p.remove(), 500);
+    }
+
+    // Teclado (sin pulsación sostenida)
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
+      if (e.code === CONFIG.TECLA_J1 && !state.teclaJ1Presionada) {
+        state.teclaJ1Presionada = true;
+        sumarPuntoJ1();
+      } else if (e.code === CONFIG.TECLA_J2 && !state.teclaJ2Presionada) {
+        state.teclaJ2Presionada = true;
+        sumarPuntoJ2();
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (e.code === CONFIG.TECLA_J1) state.teclaJ1Presionada = false;
+      if (e.code === CONFIG.TECLA_J2) state.teclaJ2Presionada = false;
+    });
+
+    // Touch & Click
+    DOM.btnClickJ1.addEventListener('touchstart', (e) => { e.preventDefault(); sumarPuntoJ1(e); }, { passive: false });
+    DOM.btnClickJ1.addEventListener('mousedown', (e) => sumarPuntoJ1(e));
+
+    DOM.btnClickJ2.addEventListener('touchstart', (e) => { e.preventDefault(); sumarPuntoJ2(e); }, { passive: false });
+    DOM.btnClickJ2.addEventListener('mousedown', (e) => sumarPuntoJ2(e));
+  </script>
+</body>
+</html>

@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Air Hockey 2P - Retro Arcade</title>
+  <link rel="stylesheet" href="../css/estilos.css">
+  <link rel="stylesheet" href="../css/movil.css">
+  <style>
+    .hockey-canvas-wrap {
+      width: min(96vw, 840px);
+      aspect-ratio: 16 / 9;
+      max-height: calc(100vh - 200px);
+      position: relative;
+      background: #000;
+      border: 4px solid var(--neon-cyan);
+      box-shadow: 0 0 25px var(--neon-cyan-glow);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    #hockey-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+    }
+
+    .key-indicator-bar {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 6px 12px;
+      width: 100%;
+      max-width: 840px;
+      margin-top: 8px;
+      font-size: clamp(0.55rem, 1.2vw, 0.72rem);
+      line-height: 1.6;
+      min-height: 28px;
+    }
+    .key-hint-p1 { color: var(--neon-cyan); }
+    .key-hint-p2 { color: var(--neon-magenta); }
+  </style>
+</head>
+<body>
+  <div class="crt-overlay" aria-hidden="true"></div>
+
+  <header class="top-controls">
+    <button type="button" class="btn-icon-arcade" id="btn-toggle-sonido" title="Sonido">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+    </button>
+  </header>
+
+  <main class="game-container">
+    <div class="game-top-bar">
+      <button type="button" class="btn-arcade btn-arcade-cyan" id="btn-back-menu" style="padding: 8px 14px; font-size: 0.65rem;">
+        &lt; MENÚ
+      </button>
+
+      <div class="game-stats">
+        <div class="stat-item" style="color: var(--neon-cyan);">J1: <span id="score-p1">0</span></div>
+        <div class="stat-item" style="color: var(--neon-yellow);">PRIMERO A 7</div>
+        <div class="stat-item" style="color: var(--neon-magenta);">J2: <span id="score-p2">0</span></div>
+      </div>
+    </div>
+
+    <div class="arcade-screen" style="padding: 10px;">
+      <!-- Overlay Inicio -->
+      <div class="game-start-overlay" id="overlay-start">
+        <div class="start-icon" style="margin-bottom: 8px;">
+          <svg width="60" height="60" viewBox="0 0 64 64" fill="none">
+            <rect x="6" y="10" width="52" height="44" rx="4" stroke="#00f0ff" stroke-width="3" fill="#060515"/>
+            <line x1="32" y1="10" x2="32" y2="54" stroke="#ffe600" stroke-width="2" stroke-dasharray="3 3"/>
+            <circle cx="32" cy="32" r="8" stroke="#ffe600" stroke-width="2" fill="none"/>
+            <circle cx="18" cy="32" r="6" fill="#00f0ff"/>
+            <circle cx="46" cy="32" r="6" fill="#ff007f"/>
+          </svg>
+        </div>
+        <h1 class="game-title-big">AIR HOCKEY 2P</h1>
+        <p class="game-instructions">
+          J1: <b>[W A S D]</b> (IZQUIERDA) | J2: <b>[FLECHAS]</b> (DERECHA). ¡METE EL DISCO EN LA PORTERÍA RIVAL!
+        </p>
+        <button type="button" class="btn-arcade btn-arcade-green blink-text" id="btn-start-hockey" style="margin-top: 10px;">
+          > START
+        </button>
+      </div>
+
+      <div class="hockey-canvas-wrap">
+        <canvas id="hockey-canvas" width="800" height="450"></canvas>
+      </div>
+
+      <div class="key-indicator-bar">
+        <span class="key-hint-p1">JUGADOR 1 (AZUL): [W A S D]</span>
+        <span class="key-hint-p2">JUGADOR 2 (ROSA): [FLECHAS]</span>
+      </div>
+    </div>
+  </main>
+
+  <script src="../js/sonidos.js"></script>
+  <script src="../js/transiciones.js"></script>
+  <script src="../js/movil.js"></script>
+
+  <script>
+    /* ==========================================================================
+       CONSTANTES CONFIGURABLES DE AIR HOCKEY 2P
+       ========================================================================== */
+    const GOLES_PARA_GANAR = 7;
+    const VELOCIDAD_PALA = 4.2;
+    const FRICCION_DISCO = 0.993;
+    const VELOCIDAD_MAX_DISCO = 10;
+    const RADIO_PALA = 28;
+    const RADIO_DISCO = 16;
+    const ANCHO_PORTERIA = 140;
+
+    const canvas = document.getElementById('hockey-canvas');
+    const ctx = canvas.getContext('2d');
+
+    const scoreP1El = document.getElementById('score-p1');
+    const scoreP2El = document.getElementById('score-p2');
+    const overlayStart = document.getElementById('overlay-start');
+    const btnStart = document.getElementById('btn-start-hockey');
+    const btnBackMenu = document.getElementById('btn-back-menu');
+
+    const W = 800;
+    const H = 450;
+    const MITAD_X = W / 2;
+
+    let scoreP1 = 0;
+    let scoreP2 = 0;
+    let jugando = false;
+    let loopId = null;
+    let sacudida = 0;
+
+    const p1 = {
+      x: 120,
+      y: H / 2,
+      vx: 0,
+      vy: 0,
+      radio: RADIO_PALA,
+      color: '#00f0ff'
+    };
+
+    const p2 = {
+      x: W - 120,
+      y: H / 2,
+      vx: 0,
+      vy: 0,
+      radio: RADIO_PALA,
+      color: '#ff007f'
+    };
+
+    const disco = {
+      x: MITAD_X,
+      y: H / 2,
+      vx: 0,
+      vy: 0,
+      radio: RADIO_DISCO,
+      color: '#ffe600'
+    };
+
+    const teclas = {};
+    window.addEventListener('keydown', (e) => {
+      teclas[e.code] = true;
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+    });
+    window.addEventListener('keyup', (e) => {
+      teclas[e.code] = false;
+    });
+
+    // Soporte táctil y aviso de orientación (solo en dispositivos táctiles reales)
+    const esTactilHockey = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+    if (esTactilHockey) {
+      if (typeof RetroMovil !== 'undefined') {
+        new RetroMovil.OrientationGuard('landscape');
+      }
+
+      function manejarToquesHockey(e) {
+        if (!jugando && overlayStart.classList.contains('oculto') === false) return;
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = W / rect.width;
+        const scaleY = H / rect.height;
+
+        for (let i = 0; i < e.touches.length; i++) {
+          const t = e.touches[i];
+          const tx = (t.clientX - rect.left) * scaleX;
+          const ty = (t.clientY - rect.top) * scaleY;
+
+          if (tx < MITAD_X) {
+            // Lado Jugador 1
+            p1.x = Math.max(p1.radio, Math.min(MITAD_X - p1.radio, tx));
+            p1.y = Math.max(p1.radio, Math.min(H - p1.radio, ty));
+          } else {
+            // Lado Jugador 2
+            p2.x = Math.max(MITAD_X + p2.radio, Math.min(W - p2.radio, tx));
+            p2.y = Math.max(p2.radio, Math.min(H - p2.radio, ty));
+          }
+        }
+      }
+
+      canvas.addEventListener('touchstart', manejarToquesHockey, { passive: false });
+      canvas.addEventListener('touchmove', manejarToquesHockey, { passive: false });
+    }
+
+    btnBackMenu.addEventListener('click', () => {
+      transicion.irA('../index.html');
+    });
+
+    btnStart.addEventListener('click', () => {
+      transicion.iniciarCarga(() => {
+        overlayStart.classList.add('oculto');
+        iniciarPartida();
+      });
+    });
+
+    function resetDisco(direccionGol = 1) {
+      disco.x = MITAD_X;
+      disco.y = H / 2;
+      disco.vx = (Math.random() > 0.5 ? 2.5 : -2.5) * (direccionGol > 0 ? -1 : 1);
+      disco.vy = (Math.random() - 0.5) * 3.5;
+      p1.x = 120;
+      p1.y = H / 2;
+      p2.x = W - 120;
+      p2.y = H / 2;
+    }
+
+    function iniciarPartida() {
+      scoreP1 = 0;
+      scoreP2 = 0;
+      scoreP1El.textContent = '0';
+      scoreP2El.textContent = '0';
+      resetDisco(1);
+      jugando = true;
+
+      if (loopId) cancelAnimationFrame(loopId);
+      bucle();
+    }
+
+    function resolverColisionPala(pala) {
+      const dx = disco.x - pala.x;
+      const dy = disco.y - pala.y;
+      const dist = Math.hypot(dx, dy);
+      const radioTotal = disco.radio + pala.radio;
+
+      if (dist < radioTotal) {
+        if (typeof sonidos !== 'undefined') sonidos.bip();
+        sacudida = 3;
+
+        // Normalizar vector de choque
+        const nx = dx / (dist || 1);
+        const ny = dy / (dist || 1);
+
+        // Separar objetos para evitar atasco
+        const overlap = radioTotal - dist;
+        disco.x += nx * overlap;
+        disco.y += ny * overlap;
+
+        // Rebote elástico con impulso
+        const velocidadRelX = disco.vx - pala.vx;
+        const velocidadRelY = disco.vy - pala.vy;
+        const productoPunto = velocidadRelX * nx + velocidadRelY * ny;
+
+        if (productoPunto < 0) {
+          const impulso = -1.6 * productoPunto;
+          disco.vx += nx * impulso + pala.vx * 0.4;
+          disco.vy += ny * impulso + pala.vy * 0.4;
+
+          // Limitar velocidad máxima
+          const mag = Math.hypot(disco.vx, disco.vy);
+          if (mag > VELOCIDAD_MAX_DISCO) {
+            disco.vx = (disco.vx / mag) * VELOCIDAD_MAX_DISCO;
+            disco.vy = (disco.vy / mag) * VELOCIDAD_MAX_DISCO;
+          }
+        }
+      }
+    }
+
+    function bucle() {
+      if (!jugando) return;
+
+      // 1. Movimiento Jugador 1 (WASD) - Bloqueado a su mitad
+      let dx1 = 0, dy1 = 0;
+      if (teclas['KeyW']) dy1 -= VELOCIDAD_PALA;
+      if (teclas['KeyS']) dy1 += VELOCIDAD_PALA;
+      if (teclas['KeyA']) dx1 -= VELOCIDAD_PALA;
+      if (teclas['KeyD']) dx1 += VELOCIDAD_PALA;
+
+      p1.vx = dx1;
+      p1.vy = dy1;
+      p1.x = Math.max(p1.radio, Math.min(MITAD_X - p1.radio - 4, p1.x + p1.vx));
+      p1.y = Math.max(p1.radio, Math.min(H - p1.radio, p1.y + p1.vy));
+
+      // 2. Movimiento Jugador 2 (Flechas) - Bloqueado a su mitad
+      let dx2 = 0, dy2 = 0;
+      if (teclas['ArrowUp']) dy2 -= VELOCIDAD_PALA;
+      if (teclas['ArrowDown']) dy2 += VELOCIDAD_PALA;
+      if (teclas['ArrowLeft']) dx2 -= VELOCIDAD_PALA;
+      if (teclas['ArrowRight']) dx2 += VELOCIDAD_PALA;
+
+      p2.vx = dx2;
+      p2.vy = dy2;
+      p2.x = Math.max(MITAD_X + p2.radio + 4, Math.min(W - p2.radio, p2.x + p2.vx));
+      p2.y = Math.max(p2.radio, Math.min(H - p2.radio, p2.y + p2.vy));
+
+      // 3. Fricción y movimiento del disco
+      disco.vx *= FRICCION_DISCO;
+      disco.vy *= FRICCION_DISCO;
+      disco.x += disco.vx;
+      disco.y += disco.vy;
+
+      // 4. Colisiones disco con palas
+      resolverColisionPala(p1);
+      resolverColisionPala(p2);
+
+      // 5. Rebote disco con bordes superior e inferior
+      if (disco.y - disco.radio <= 0) {
+        disco.y = disco.radio;
+        disco.vy *= -1;
+        if (typeof sonidos !== 'undefined') sonidos.click();
+      } else if (disco.y + disco.radio >= H) {
+        disco.y = H - disco.radio;
+        disco.vy *= -1;
+        if (typeof sonidos !== 'undefined') sonidos.click();
+      }
+
+      // 6. Porterías izquierda y derecha
+      const porteriaY1 = (H - ANCHO_PORTERIA) / 2;
+      const porteriaY2 = porteriaY1 + ANCHO_PORTERIA;
+
+      // Pared izquierda o Gol de J2
+      if (disco.x - disco.radio <= 0) {
+        if (disco.y >= porteriaY1 && disco.y <= porteriaY2) {
+          // ¡GOL DE JUGADOR 2!
+          scoreP2++;
+          scoreP2El.textContent = scoreP2;
+          if (typeof sonidos !== 'undefined') sonidos.punto();
+          sacudida = 10;
+          if (scoreP2 >= GOLES_PARA_GANAR) {
+            finalizarPartida(2);
+            return;
+          }
+          resetDisco(-1);
+        } else {
+          disco.x = disco.radio;
+          disco.vx *= -1;
+          if (typeof sonidos !== 'undefined') sonidos.click();
+        }
+      }
+
+      // Pared derecha o Gol de J1
+      if (disco.x + disco.radio >= W) {
+        if (disco.y >= porteriaY1 && disco.y <= porteriaY2) {
+          // ¡GOL DE JUGADOR 1!
+          scoreP1++;
+          scoreP1El.textContent = scoreP1;
+          if (typeof sonidos !== 'undefined') sonidos.punto();
+          sacudida = 10;
+          if (scoreP1 >= GOLES_PARA_GANAR) {
+            finalizarPartida(1);
+            return;
+          }
+          resetDisco(1);
+        } else {
+          disco.x = W - disco.radio;
+          disco.vx *= -1;
+          if (typeof sonidos !== 'undefined') sonidos.click();
+        }
+      }
+
+      dibujar();
+
+      if (jugando) {
+        loopId = requestAnimationFrame(bucle);
+      }
+    }
+
+    function finalizarPartida(ganador) {
+      jugando = false;
+      if (typeof sonidos !== 'undefined') sonidos.victoria();
+
+      transicion.mostrarVictoria({
+        titulo: `¡JUGADOR ${ganador} GANA!`,
+        lineasInfo: [
+          { label: 'JUGADOR 1', valor: `${scoreP1} GOLES` },
+          { label: 'JUGADOR 2', valor: `${scoreP2} GOLES` },
+          { label: 'OBJETIVO', valor: `${GOLES_PARA_GANAR} GOLES` }
+        ],
+        onReintentar: () => iniciarPartida(),
+        urlMenu: '../index.html'
+      });
+    }
+
+    function dibujar() {
+      ctx.save();
+
+      // Efecto sacudida
+      if (sacudida > 0) {
+        const sx = (Math.random() - 0.5) * sacudida;
+        const sy = (Math.random() - 0.5) * sacudida;
+        ctx.translate(sx, sy);
+        sacudida *= 0.85;
+        if (sacudida < 0.5) sacudida = 0;
+      }
+
+      // Fondo mesa
+      ctx.fillStyle = '#060416';
+      ctx.fillRect(0, 0, W, H);
+
+      // Líneas de la mesa
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+      ctx.lineWidth = 3;
+
+      // Línea divisoria central
+      ctx.beginPath();
+      ctx.setLineDash([8, 8]);
+      ctx.moveTo(MITAD_X, 0);
+      ctx.lineTo(MITAD_X, H);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Círculo central
+      ctx.beginPath();
+      ctx.arc(MITAD_X, H / 2, 70, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Porterías (Glow neón)
+      const porteriaY1 = (H - ANCHO_PORTERIA) / 2;
+
+      // Portería J1 (Izquierda)
+      ctx.strokeStyle = '#00f0ff';
+      ctx.shadowColor = '#00f0ff';
+      ctx.shadowBlur = 12;
+      ctx.strokeRect(0, porteriaY1, 14, ANCHO_PORTERIA);
+
+      // Portería J2 (Derecha)
+      ctx.strokeStyle = '#ff007f';
+      ctx.shadowColor = '#ff007f';
+      ctx.shadowBlur = 12;
+      ctx.strokeRect(W - 14, porteriaY1, 14, ANCHO_PORTERIA);
+
+      ctx.shadowBlur = 0;
+
+      // Dibujar Pala J1
+      ctx.save();
+      ctx.fillStyle = p1.color;
+      ctx.shadowColor = p1.color;
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.arc(p1.x, p1.y, p1.radio, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#060515';
+      ctx.beginPath();
+      ctx.arc(p1.x, p1.y, p1.radio * 0.45, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // Dibujar Pala J2
+      ctx.save();
+      ctx.fillStyle = p2.color;
+      ctx.shadowColor = p2.color;
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.arc(p2.x, p2.y, p2.radio, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#060515';
+      ctx.beginPath();
+      ctx.arc(p2.x, p2.y, p2.radio * 0.45, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // Dibujar Disco
+      ctx.save();
+      ctx.fillStyle = disco.color;
+      ctx.shadowColor = disco.color;
+      ctx.shadowBlur = 16;
+      ctx.beginPath();
+      ctx.arc(disco.x, disco.y, disco.radio, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(disco.x, disco.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      ctx.restore();
+    }
+
+    dibujar();
+  </script>
+</body>
+</html>

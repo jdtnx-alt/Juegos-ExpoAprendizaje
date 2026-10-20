@@ -1,0 +1,805 @@
+/* ==========================================================================
+   ESTILOS RETRO ARCADE AÑOS 80 - EXPOAPRENDIZAJE
+   Estética de máquina recreativa: Colores neón, fuentes pixeladas,
+   pantalla CRT con líneas de escaneo (scanlines) y botones 3D de arcade.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+:root {
+  /* Paleta Neón 80s */
+  --bg-dark: #070714;
+  --bg-cabinet: #0d0b21;
+  --bg-card: rgba(18, 14, 38, 0.92);
+
+  --neon-cyan: #00f0ff;
+  --neon-cyan-glow: rgba(0, 240, 255, 0.55);
+
+  --neon-magenta: #ff007f;
+  --neon-magenta-glow: rgba(255, 0, 127, 0.55);
+
+  --neon-yellow: #ffe600;
+  --neon-yellow-glow: rgba(255, 230, 0, 0.55);
+
+  --neon-green: #39ff14;
+  --neon-green-glow: rgba(57, 255, 20, 0.55);
+
+  --neon-purple: #b026ff;
+  --text-white: #f5f5ff;
+  --text-muted: #8e8aa8;
+
+  /* Fuente pixel art con fallback seguro */
+  --font-pixel: 'Press Start 2P', 'Courier New', monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html {
+  width: 100%;
+  min-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+body {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background-color: var(--bg-dark);
+  color: var(--text-white);
+  font-family: var(--font-pixel);
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: manipulation;
+  letter-spacing: 0.5px;
+  image-rendering: pixelated;
+}
+
+/* ==========================================================================
+   EFECTO CRT (SCANLINES + VIÑETA + PARPADEO SUTIL)
+   ========================================================================== */
+.crt-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 9999;
+  background: 
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.28) 0px,
+      rgba(0, 0, 0, 0.28) 1.5px,
+      transparent 1.5px,
+      transparent 3px
+    ),
+    radial-gradient(
+      circle at 50% 50%,
+      transparent 60%,
+      rgba(0, 0, 0, 0.65) 100%
+    );
+  opacity: 0.85;
+}
+
+/* ==========================================================================
+   BOTONES ESTILO ARCADE (BLOQUES 3D CON EFECTO DE HUNDIMIENTO)
+   ========================================================================== */
+.btn-arcade {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-family: var(--font-pixel);
+  font-size: clamp(0.7rem, 1.6vw, 0.95rem);
+  text-transform: uppercase;
+  text-decoration: none;
+  padding: 14px 24px;
+  border: 3px solid #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  background: #1a1a2e;
+  color: #fff;
+  position: relative;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  line-height: 1.4;
+  text-align: center;
+}
+
+/* Colores de botones arcade */
+.btn-arcade-yellow {
+  background: #2a2400;
+  border-color: var(--neon-yellow);
+  color: var(--neon-yellow);
+  box-shadow: 0 6px 0 #8c7800, 0 8px 20px var(--neon-yellow-glow);
+  text-shadow: 0 0 8px var(--neon-yellow-glow);
+}
+.btn-arcade-yellow:hover {
+  background: var(--neon-yellow);
+  color: #000;
+  text-shadow: none;
+}
+
+.btn-arcade-magenta {
+  background: #330018;
+  border-color: var(--neon-magenta);
+  color: var(--neon-magenta);
+  box-shadow: 0 6px 0 #80003f, 0 8px 20px var(--neon-magenta-glow);
+  text-shadow: 0 0 8px var(--neon-magenta-glow);
+}
+.btn-arcade-magenta:hover {
+  background: var(--neon-magenta);
+  color: #fff;
+  text-shadow: none;
+}
+
+.btn-arcade-cyan {
+  background: #002b33;
+  border-color: var(--neon-cyan);
+  color: var(--neon-cyan);
+  box-shadow: 0 6px 0 #006b80, 0 8px 20px var(--neon-cyan-glow);
+  text-shadow: 0 0 8px var(--neon-cyan-glow);
+}
+.btn-arcade-cyan:hover {
+  background: var(--neon-cyan);
+  color: #000;
+  text-shadow: none;
+}
+
+.btn-arcade-green {
+  background: #0a2e04;
+  border-color: var(--neon-green);
+  color: var(--neon-green);
+  box-shadow: 0 6px 0 #186609, 0 8px 20px var(--neon-green-glow);
+  text-shadow: 0 0 8px var(--neon-green-glow);
+}
+.btn-arcade-green:hover {
+  background: var(--neon-green);
+  color: #000;
+  text-shadow: none;
+}
+
+/* Efecto de hundimiento 3D al hacer clic o toque */
+.btn-arcade:active {
+  transform: translateY(5px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.8) !important;
+}
+
+/* Parpadeo clásico 8-bit */
+.blink-text {
+  animation: arcadeBlink 0.75s infinite steps(1, start);
+}
+@keyframes arcadeBlink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+/* ==========================================================================
+   BARRA SUPERIOR DE UTILIDADES
+   ========================================================================== */
+.top-controls {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 1000;
+  display: flex;
+  gap: 10px;
+}
+
+.btn-icon-arcade {
+  width: 44px;
+  height: 44px;
+  background: #110e26;
+  border: 2px solid var(--neon-cyan);
+  border-radius: 4px;
+  color: var(--neon-cyan);
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 0 #005f66, 0 0 12px var(--neon-cyan-glow);
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+
+.btn-icon-arcade:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #005f66;
+}
+
+.btn-icon-arcade.silenciado {
+  border-color: var(--neon-magenta);
+  color: var(--neon-magenta);
+  box-shadow: 0 4px 0 #80003f;
+}
+
+/* ==========================================================================
+   PANTALLAS DEL MENÚ
+   ========================================================================== */
+.pantalla {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 24px 16px;
+  box-sizing: border-box;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+#pantalla-inicio {
+  justify-content: center;
+}
+
+#pantalla-seleccion {
+  justify-content: flex-start;
+  padding-bottom: 70px;
+}
+
+.pantalla.oculta {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: scale(0.97);
+}
+
+.pantalla.activa {
+  opacity: 1;
+  pointer-events: all;
+  visibility: visible;
+  transform: scale(1);
+}
+
+/* 1. Pantalla de Inicio (Hero) */
+.hero-content {
+  text-align: center;
+  max-width: 860px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.arcade-badge {
+  display: inline-block;
+  background: rgba(255, 0, 127, 0.15);
+  border: 2px dashed var(--neon-magenta);
+  color: var(--neon-magenta);
+  padding: 8px 18px;
+  font-size: clamp(0.7rem, 1.4vw, 0.95rem);
+  box-shadow: 0 0 16px var(--neon-magenta-glow);
+  text-shadow: 0 0 8px var(--neon-magenta-glow);
+}
+
+.hero-title {
+  font-size: clamp(1.8rem, 5.5vw, 3.8rem);
+  line-height: 1.25;
+  color: var(--neon-yellow);
+  text-shadow: 
+    0 0 10px var(--neon-yellow-glow),
+    4px 4px 0 #80003f,
+    6px 6px 0 #000;
+  margin-top: 6px;
+}
+
+.hero-subtitle {
+  font-size: clamp(0.65rem, 1.4vw, 0.85rem);
+  color: var(--neon-cyan);
+  line-height: 1.8;
+  max-width: 640px;
+  text-shadow: 0 0 8px var(--neon-cyan-glow);
+}
+
+/* Botón "PRESS START" gigante */
+.btn-press-start {
+  margin-top: 18px;
+  padding: clamp(16px, 3vh, 24px) clamp(30px, 6vw, 60px);
+  font-size: clamp(1rem, 2.5vw, 1.6rem);
+  border: 4px solid var(--neon-green);
+  background: #092605;
+  color: var(--neon-green);
+  box-shadow: 0 8px 0 #0f4d05, 0 0 35px var(--neon-green-glow);
+  text-shadow: 0 0 12px var(--neon-green-glow);
+}
+
+.btn-press-start:hover {
+  background: var(--neon-green);
+  color: #000;
+}
+
+.hero-credits {
+  margin-top: 24px;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+/* ==========================================================================
+   2. PANTALLA DE SELECCIÓN DE JUEGOS
+   ========================================================================== */
+.selection-container {
+  width: 100%;
+  max-width: 1200px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 20px 0 50px 0;
+}
+
+.selection-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  border-bottom: 3px solid var(--neon-cyan);
+  padding-bottom: 16px;
+  box-shadow: 0 4px 15px rgba(0, 240, 255, 0.25);
+}
+
+.selection-title {
+  font-size: clamp(1.2rem, 3vw, 2rem);
+  color: var(--neon-cyan);
+  text-shadow: 0 0 12px var(--neon-cyan-glow), 3px 3px 0 #003847;
+}
+
+.selection-subtitle {
+  font-size: clamp(0.58rem, 1.2vw, 0.75rem);
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+/* Cuadrícula de juegos */
+.games-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px;
+  width: 100%;
+}
+
+@media (max-width: 980px) {
+  .games-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+  }
+}
+
+@media (max-width: 640px) {
+  .games-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+/* TARJETA ARCADE DE JUEGO */
+.game-card {
+  background: var(--bg-card);
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 20px 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  text-decoration: none;
+  color: #fff;
+  cursor: pointer;
+  position: relative;
+  box-shadow: 0 6px 0 #110e26, 0 10px 25px rgba(0, 0, 0, 0.7);
+  transition: transform 0.1s ease, border-color 0.1s, box-shadow 0.1s;
+}
+
+.game-card:hover {
+  transform: translateY(-5px);
+  border-color: var(--neon-yellow);
+  box-shadow: 0 10px 0 #4a3e00, 0 0 30px var(--neon-yellow-glow);
+}
+
+.game-card:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #4a3e00;
+}
+
+/* Animación escalonada para carga retro de tarjetas */
+.game-card {
+  opacity: 0;
+  animation: retroCardDrop 0.35s ease-out forwards;
+}
+.game-card:nth-child(1) { animation-delay: 0.05s; }
+.game-card:nth-child(2) { animation-delay: 0.10s; }
+.game-card:nth-child(3) { animation-delay: 0.15s; }
+.game-card:nth-child(4) { animation-delay: 0.20s; }
+.game-card:nth-child(5) { animation-delay: 0.25s; }
+.game-card:nth-child(6) { animation-delay: 0.30s; }
+.game-card:nth-child(7) { animation-delay: 0.35s; }
+
+@keyframes retroCardDrop {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.section-divider {
+  font-size: clamp(0.75rem, 1.8vw, 1.05rem);
+  color: var(--neon-yellow);
+  text-shadow: 0 0 10px var(--neon-yellow-glow);
+  padding: 10px 14px;
+  background: rgba(255, 230, 0, 0.08);
+  border-left: 4px solid var(--neon-yellow);
+  border-bottom: 1px solid rgba(255, 230, 0, 0.25);
+  margin-top: 18px;
+  margin-bottom: 6px;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.card-icon-wrap {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 0 8px rgba(0, 240, 255, 0.45));
+}
+
+.card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.card-emoji {
+  font-size: clamp(2.4rem, 5vw, 3.2rem);
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.3));
+}
+
+.card-badges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.badge-players {
+  background: #000;
+  border: 1px solid var(--neon-cyan);
+  color: var(--neon-cyan);
+  padding: 4px 8px;
+  font-size: 0.58rem;
+}
+
+.badge-status.disponible {
+  background: #000;
+  border: 1px solid var(--neon-green);
+  color: var(--neon-green);
+  padding: 4px 8px;
+  font-size: 0.58rem;
+  box-shadow: 0 0 8px var(--neon-green-glow);
+}
+
+.card-title {
+  font-size: clamp(0.85rem, 1.8vw, 1.05rem);
+  line-height: 1.4;
+  color: var(--neon-yellow);
+  margin-bottom: 10px;
+}
+
+.card-desc {
+  font-size: clamp(0.58rem, 1.2vw, 0.7rem);
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.card-footer {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 2px dashed rgba(255, 255, 255, 0.15);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.65rem;
+  color: var(--neon-green);
+}
+
+/* ==========================================================================
+   ESTRUCTURA GENERAL DE CADA JUEGO (CABINET RETRO)
+   ========================================================================== */
+.game-container {
+  width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 8px 14px;
+  position: relative;
+  z-index: 10;
+  overflow: hidden;
+}
+
+.game-top-bar {
+  width: 100%;
+  max-width: 900px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--bg-cabinet);
+  border: 2px solid var(--neon-cyan);
+  border-radius: 4px;
+  margin-bottom: 6px;
+  flex-shrink: 0;
+  box-shadow: 0 0 15px var(--neon-cyan-glow);
+}
+
+.game-stats {
+  display: flex;
+  gap: 16px;
+  font-size: clamp(0.6rem, 1.4vw, 0.85rem);
+}
+
+.stat-item {
+  color: var(--neon-yellow);
+}
+.stat-item span {
+  color: #fff;
+}
+
+.arcade-screen {
+  width: 100%;
+  max-width: 900px;
+  flex: 1 1 auto;
+  min-height: 0;
+  background: #000;
+  border: 4px solid var(--neon-magenta);
+  border-radius: 6px;
+  box-shadow: 0 0 25px var(--neon-magenta-glow), inset 0 0 30px rgba(0,0,0,0.9);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Pantalla previa de Instrucciones / Start */
+.game-start-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(5, 5, 14, 0.94);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  gap: 16px;
+}
+
+.game-start-overlay.oculto {
+  display: none;
+}
+
+.game-title-big {
+  font-size: clamp(1.2rem, 3.5vw, 2.2rem);
+  color: var(--neon-yellow);
+  text-shadow: 0 0 14px var(--neon-yellow-glow), 3px 3px 0 #59002a;
+}
+
+.game-instructions {
+  font-size: clamp(0.65rem, 1.4vw, 0.82rem);
+  color: var(--neon-cyan);
+  max-width: 600px;
+  line-height: 1.8;
+}
+
+/* ==========================================================================
+   TRANSICIONES ARCADE (CORTINAS, PANTALLAS DE CARGA Y MODALES)
+   ========================================================================== */
+#arcade-transition-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 10000;
+}
+
+/* Cortina de barras */
+.arcade-curtain {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+  z-index: 10001;
+}
+
+.curtain-stripes {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.curtain-stripes span {
+  flex: 1;
+  background: #000;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.35s cubic-bezier(0.8, 0, 0.2, 1);
+}
+
+.arcade-curtain.cerrando {
+  pointer-events: all;
+}
+.arcade-curtain.cerrando .curtain-stripes span {
+  transform: scaleX(1);
+}
+
+.arcade-curtain.abriendo .curtain-stripes span {
+  transform: scaleX(0);
+  transform-origin: right;
+}
+
+/* Pantalla de Carga 8-bit */
+.arcade-loader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10002;
+  pointer-events: all;
+  text-align: center;
+}
+
+.arcade-loader.activo {
+  display: flex;
+}
+
+.loader-box {
+  border: 3px solid var(--neon-cyan);
+  padding: 30px;
+  background: #0b091a;
+  box-shadow: 0 0 30px var(--neon-cyan-glow);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.loader-logo {
+  font-size: clamp(0.75rem, 1.8vw, 1rem);
+  color: var(--neon-yellow);
+}
+
+.loader-status {
+  font-size: clamp(0.7rem, 1.6vw, 0.9rem);
+  color: #fff;
+}
+
+.loader-progress-bar {
+  font-size: clamp(1rem, 2.2vw, 1.4rem);
+  color: var(--neon-green);
+  letter-spacing: 2px;
+}
+
+.loader-ready {
+  font-size: clamp(1rem, 2.5vw, 1.5rem);
+  color: var(--neon-magenta);
+  text-shadow: 0 0 10px var(--neon-magenta-glow);
+}
+
+/* Modales Arcade (Game Over y Victoria) */
+.arcade-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(3, 2, 10, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 10003;
+  pointer-events: all;
+}
+
+.arcade-modal.activo {
+  display: flex;
+}
+
+.arcade-modal-card {
+  background: #0d0b21;
+  border: 4px solid var(--neon-magenta);
+  box-shadow: 0 0 40px var(--neon-magenta-glow), inset 0 0 20px rgba(255, 0, 127, 0.2);
+  padding: clamp(24px, 5vw, 40px);
+  max-width: 540px;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  border-radius: 6px;
+}
+
+.gameover-title {
+  font-size: clamp(1.8rem, 4.5vw, 2.8rem);
+  color: var(--neon-magenta);
+  text-shadow: 0 0 15px var(--neon-magenta-glow), 3px 3px 0 #59002a;
+}
+
+.victory-icon {
+  font-size: 3.5rem;
+}
+
+.victory-title {
+  font-size: clamp(1.5rem, 4vw, 2.4rem);
+  text-shadow: 0 0 15px var(--neon-yellow-glow);
+}
+
+.gameover-score-wrap {
+  width: 100%;
+  background: #000;
+  border: 2px solid var(--neon-cyan);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: clamp(0.7rem, 1.8vw, 0.95rem);
+}
+
+.stat-highlight {
+  color: var(--neon-cyan);
+}
+
+.stat-gold {
+  color: var(--neon-yellow);
+}
+
+.arcade-modal-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}

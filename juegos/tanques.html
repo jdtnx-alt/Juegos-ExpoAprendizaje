@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Duelo de Tanques 2P - Retro Arcade</title>
+  <link rel="stylesheet" href="../css/estilos.css">
+  <link rel="stylesheet" href="../css/movil.css">
+  <style>
+    .tanks-canvas-wrap {
+      width: min(96vw, 840px);
+      aspect-ratio: 16 / 9;
+      max-height: calc(100vh - 200px);
+      position: relative;
+      background: #000;
+      border: 4px solid var(--neon-magenta);
+      box-shadow: 0 0 25px var(--neon-magenta-glow);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    #tanks-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+    }
+
+    .key-indicator-bar {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 6px 12px;
+      width: 100%;
+      max-width: 840px;
+      margin-top: 8px;
+      font-size: clamp(0.55rem, 1.2vw, 0.72rem);
+      line-height: 1.6;
+      min-height: 28px;
+    }
+  </style>
+</head>
+<body>
+  <div class="crt-overlay" aria-hidden="true"></div>
+
+  <header class="top-controls">
+    <button type="button" class="btn-icon-arcade" id="btn-toggle-sonido" title="Sonido">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+    </button>
+  </header>
+
+  <main class="game-container">
+    <div class="game-top-bar">
+      <button type="button" class="btn-arcade btn-arcade-cyan" id="btn-back-menu" style="padding: 8px 14px; font-size: 0.65rem;">
+        &lt; MENÚ
+      </button>
+
+      <div class="game-stats">
+        <div class="stat-item" style="color: var(--neon-cyan);">J1 VIDAS: <span id="lives-p1">III</span></div>
+        <div class="stat-item" style="color: var(--neon-yellow);">DUELO 1 VS 1</div>
+        <div class="stat-item" style="color: var(--neon-magenta);">J2 VIDAS: <span id="lives-p2">III</span></div>
+      </div>
+    </div>
+
+    <div class="arcade-screen" style="padding: 10px;">
+      <!-- Overlay de Inicio -->
+      <div class="game-start-overlay" id="overlay-start">
+        <div class="start-icon" style="margin-bottom: 8px;">
+          <svg width="60" height="60" viewBox="0 0 64 64" fill="none">
+            <rect x="14" y="20" width="36" height="24" rx="4" fill="#00f0ff" stroke="#fff" stroke-width="2"/>
+            <rect x="22" y="14" width="20" height="12" rx="2" fill="#0b1b2b"/>
+            <line x1="32" y1="14" x2="32" y2="2" stroke="#ffe600" stroke-width="4"/>
+            <rect x="10" y="16" width="6" height="32" rx="2" fill="#333"/>
+            <rect x="48" y="16" width="6" height="32" rx="2" fill="#333"/>
+          </svg>
+        </div>
+        <h1 class="game-title-big">DUELO DE TANQUES 2P</h1>
+        <p class="game-instructions">
+          J1: <b>[WASD] + [ESPACIO]</b> (DISPARAR) | J2: <b>[FLECHAS] + [ENTER]</b> (DISPARAR). ¡LAS BALAS REBOTAN 1 VEZ EN MUROS!
+        </p>
+        <button type="button" class="btn-arcade btn-arcade-green blink-text" id="btn-start-tanks" style="margin-top: 10px;">
+          > START
+        </button>
+      </div>
+
+      <div class="tanks-canvas-wrap">
+        <canvas id="tanks-canvas" width="800" height="450"></canvas>
+      </div>
+
+      <!-- Controles táctiles en pantalla para móvil (J1 izquierda, J2 derecha) -->
+      <div class="arcade-touch-layer dual-touch-overlay" id="touch-controls">
+        <div class="side-p1">
+          <div id="joystick-j1-container"></div>
+          <div id="btn-fire-j1-container"></div>
+        </div>
+        <div class="side-p2">
+          <div id="btn-fire-j2-container"></div>
+          <div id="joystick-j2-container"></div>
+        </div>
+      </div>
+
+      <div class="key-indicator-bar">
+        <span style="color: var(--neon-cyan);">J1 (AZUL): [WASD] MOVER / [ESPACIO] DISPARO</span>
+        <span style="color: var(--neon-magenta);">J2 (ROSA): [FLECHAS] MOVER / [ENTER] DISPARO</span>
+      </div>
+    </div>
+  </main>
+
+  <script src="../js/sonidos.js"></script>
+  <script src="../js/transiciones.js"></script>
+  <script src="../js/movil.js"></script>
+
+  <script>
+    /* ==========================================================================
+       CONSTANTES CONFIGURABLES DEL DUELO DE TANQUES
+       ========================================================================== */
+    const VIDAS_INICIALES = 3;
+    const MAX_BALAS_ACTIVAS = 3;
+    const VELOCIDAD_TANQUE = 3.6;
+    const VELOCIDAD_BALA = 7.0;
+    const COOLDOWN_DISPARO_MS = 280;
+    const TAM_BALA = 6;
+    const RADIO_TANQUE = 18;
+
+    const canvas = document.getElementById('tanks-canvas');
+    const ctx = canvas.getContext('2d');
+
+    const livesP1El = document.getElementById('lives-p1');
+    const livesP2El = document.getElementById('lives-p2');
+    const overlayStart = document.getElementById('overlay-start');
+    const btnStart = document.getElementById('btn-start-tanks');
+    const btnBackMenu = document.getElementById('btn-back-menu');
+
+    const W = 800;
+    const H = 450;
+
+    let jugando = false;
+    let loopId = null;
+
+    // Obstáculos fijos y destructibles en el mapa
+    const MAPA_BLOQUES = [
+      // Paredes centrales
+      { x: 380, y: 60, w: 40, h: 110, destructible: false },
+      { x: 380, y: 280, w: 40, h: 110, destructible: false },
+
+      // Búnkers zona J1
+      { x: 180, y: 140, w: 50, h: 50, destructible: true, vida: 2 },
+      { x: 180, y: 260, w: 50, h: 50, destructible: true, vida: 2 },
+
+      // Búnkers zona J2
+      { x: 570, y: 140, w: 50, h: 50, destructible: true, vida: 2 },
+      { x: 570, y: 260, w: 50, h: 50, destructible: true, vida: 2 },
+
+      // Muro medio centro
+      { x: 340, y: 210, w: 120, h: 30, destructible: true, vida: 3 }
+    ];
+
+    let bloques = [];
+    let particulas = [];
+
+    // Tanque 1 (Cyan)
+    const t1 = {
+      x: 80,
+      y: H / 2,
+      angulo: 0,          // 0: Derecha, PI/2: Abajo, PI: Izquierda, 3PI/2: Arriba
+      color: '#00f0ff',
+      vidas: VIDAS_INICIALES,
+      balas: [],
+      ultimoDisparo: 0,
+      invulnerable: 0
+    };
+
+    // Tanque 2 (Magenta)
+    const t2 = {
+      x: W - 80,
+      y: H / 2,
+      angulo: Math.PI,    // Mirando a la izquierda
+      color: '#ff007f',
+      vidas: VIDAS_INICIALES,
+      balas: [],
+      ultimoDisparo: 0,
+      invulnerable: 0
+    };
+
+    const teclas = {};
+    window.addEventListener('keydown', (e) => {
+      teclas[e.code] = true;
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Enter'].includes(e.code)) e.preventDefault();
+    });
+    window.addEventListener('keyup', (e) => {
+      teclas[e.code] = false;
+    });
+
+    // Joysticks y botones virtuales para móvil (solo en pantallas táctiles reales)
+    let joyVecJ1 = { x: 0, y: 0 };
+    let joyVecJ2 = { x: 0, y: 0 };
+
+    const esTactilTanques = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+    if (typeof RetroMovil !== 'undefined' && esTactilTanques) {
+      // Guardia de orientación (requiere horizontal en móvil)
+      new RetroMovil.OrientationGuard('landscape');
+
+      new RetroMovil.VirtualJoystick('#joystick-j1-container', {
+        color: '#00f0ff',
+        onMove: (v) => { joyVecJ1 = v; }
+      });
+
+      new RetroMovil.TouchActionButton('#btn-fire-j1-container', {
+        texto: 'FIRE',
+        color: '#00f0ff',
+        onPress: () => { if (jugando) dispararBala(t1); }
+      });
+
+      new RetroMovil.VirtualJoystick('#joystick-j2-container', {
+        color: '#ff007f',
+        onMove: (v) => { joyVecJ2 = v; }
+      });
+
+      new RetroMovil.TouchActionButton('#btn-fire-j2-container', {
+        texto: 'FIRE',
+        color: '#ff007f',
+        onPress: () => { if (jugando) dispararBala(t2); }
+      });
+    }
+
+    btnBackMenu.addEventListener('click', () => {
+      transicion.irA('../index.html');
+    });
+
+    btnStart.addEventListener('click', () => {
+      transicion.iniciarCarga(() => {
+        overlayStart.classList.add('oculto');
+        iniciarPartida();
+      });
+    });
+
+    function iniciarPartida() {
+      jugando = true;
+      bloques = JSON.parse(JSON.stringify(MAPA_BLOQUES));
+      particulas = [];
+
+      t1.x = 80;
+      t1.y = H / 2;
+      t1.angulo = 0;
+      t1.vidas = VIDAS_INICIALES;
+      t1.balas = [];
+      t1.invulnerable = 0;
+
+      t2.x = W - 80;
+      t2.y = H / 2;
+      t2.angulo = Math.PI;
+      t2.vidas = VIDAS_INICIALES;
+      t2.balas = [];
+      t2.invulnerable = 0;
+
+      actualizarVidasUI();
+
+      if (loopId) cancelAnimationFrame(loopId);
+      bucle();
+    }
+
+    function actualizarVidasUI() {
+      livesP1El.textContent = 'I'.repeat(Math.max(0, t1.vidas)) || '0';
+      livesP2El.textContent = 'I'.repeat(Math.max(0, t2.vidas)) || '0';
+    }
+
+    function dispararBala(tanque) {
+      const ahora = performance.now();
+      if (ahora - tanque.ultimoDisparo < COOLDOWN_DISPARO_MS) return;
+      if (tanque.balas.length >= MAX_BALAS_ACTIVAS) return;
+
+      tanque.ultimoDisparo = ahora;
+      if (typeof sonidos !== 'undefined') sonidos.bip();
+
+      const puntaX = tanque.x + Math.cos(tanque.angulo) * (RADIO_TANQUE + 6);
+      const puntaY = tanque.y + Math.sin(tanque.angulo) * (RADIO_TANQUE + 6);
+
+      tanque.balas.push({
+        x: puntaX,
+        y: puntaY,
+        vx: Math.cos(tanque.angulo) * VELOCIDAD_BALA,
+        vy: Math.sin(tanque.angulo) * VELOCIDAD_BALA,
+        rebotes: 0,
+        color: tanque.color
+      });
+    }
+
+    function crearExplosion(x, y, color, cantidad = 18) {
+      for (let i = 0; i < cantidad; i++) {
+        particulas.push({
+          x: x,
+          y: y,
+          vx: (Math.random() - 0.5) * 7,
+          vy: (Math.random() - 0.5) * 7,
+          size: Math.random() * 4 + 2,
+          color: color,
+          vida: 24
+        });
+      }
+    }
+
+    // Comprobar colisión círculo con rectángulos
+    function chocaConBloques(nx, ny, radio) {
+      // Límites de la arena
+      if (nx - radio < 8 || nx + radio > W - 8 || ny - radio < 8 || ny + radio > H - 8) {
+        return true;
+      }
+
+      for (let b of bloques) {
+        const cx = Math.max(b.x, Math.min(nx, b.x + b.w));
+        const cy = Math.max(b.y, Math.min(ny, b.y + b.h));
+        const dist = Math.hypot(nx - cx, ny - cy);
+        if (dist < radio) return true;
+      }
+      return false;
+    }
+
+    function moverTanque(t, vx, vy) {
+      if (vx === 0 && vy === 0) return;
+
+      t.angulo = Math.atan2(vy, vx);
+
+      // Intentar mover en X
+      const nextX = t.x + vx;
+      if (!chocaConBloques(nextX, t.y, RADIO_TANQUE)) {
+        t.x = nextX;
+      }
+
+      // Intentar mover en Y
+      const nextY = t.y + vy;
+      if (!chocaConBloques(t.x, nextY, RADIO_TANQUE)) {
+        t.y = nextY;
+      }
+    }
+
+    function bucle() {
+      if (!jugando) return;
+
+      // 1. Controles J1 (WASD o Joystick Táctil)
+      let vx1 = 0, vy1 = 0;
+      if (teclas['KeyW']) vy1 -= VELOCIDAD_TANQUE;
+      if (teclas['KeyS']) vy1 += VELOCIDAD_TANQUE;
+      if (teclas['KeyA']) vx1 -= VELOCIDAD_TANQUE;
+      if (teclas['KeyD']) vx1 += VELOCIDAD_TANQUE;
+      if (joyVecJ1.x !== 0 || joyVecJ1.y !== 0) {
+        vx1 = joyVecJ1.x * VELOCIDAD_TANQUE;
+        vy1 = joyVecJ1.y * VELOCIDAD_TANQUE;
+      }
+      moverTanque(t1, vx1, vy1);
+
+      if (teclas['Space']) {
+        dispararBala(t1);
+      }
+
+      // 2. Controles J2 (Flechas o Joystick Táctil)
+      let vx2 = 0, vy2 = 0;
+      if (teclas['ArrowUp']) vy2 -= VELOCIDAD_TANQUE;
+      if (teclas['ArrowDown']) vy2 += VELOCIDAD_TANQUE;
+      if (teclas['ArrowLeft']) vx2 -= VELOCIDAD_TANQUE;
+      if (teclas['ArrowRight']) vx2 += VELOCIDAD_TANQUE;
+      if (joyVecJ2.x !== 0 || joyVecJ2.y !== 0) {
+        vx2 = joyVecJ2.x * VELOCIDAD_TANQUE;
+        vy2 = joyVecJ2.y * VELOCIDAD_TANQUE;
+      }
+      moverTanque(t2, vx2, vy2);
+
+      if (teclas['Enter']) {
+        dispararBala(t2);
+      }
+
+      // Reducir invulnerabilidad
+      if (t1.invulnerable > 0) t1.invulnerable--;
+      if (t2.invulnerable > 0) t2.invulnerable--;
+
+      // 3. Actualizar balas de ambos tanques
+      actualizarBalas(t1, t2);
+      actualizarBalas(t2, t1);
+
+      // 4. Actualizar partículas
+      for (let i = particulas.length - 1; i >= 0; i--) {
+        const p = particulas[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vida--;
+        if (p.vida <= 0) particulas.splice(i, 1);
+      }
+
+      dibujar();
+
+      if (jugando) {
+        loopId = requestAnimationFrame(bucle);
+      }
+    }
+
+    function actualizarBalas(origen, enemigo) {
+      for (let i = origen.balas.length - 1; i >= 0; i--) {
+        const b = origen.balas[i];
+        b.x += b.vx;
+        b.y += b.vy;
+
+        // Rebote en bordes exteriores
+        let rebotarX = false;
+        let rebotarY = false;
+
+        if (b.x <= 10 || b.x >= W - 10) rebotarX = true;
+        if (b.y <= 10 || b.y >= H - 10) rebotarY = true;
+
+        // Rebote o impacto en bloques
+        for (let k = bloques.length - 1; k >= 0; k--) {
+          const bl = bloques[k];
+          if (b.x >= bl.x && b.x <= bl.x + bl.w && b.y >= bl.y && b.y <= bl.y + bl.h) {
+            if (bl.destructible) {
+              bl.vida--;
+              crearExplosion(b.x, b.y, '#ffe600', 8);
+              if (bl.vida <= 0) {
+                bloques.splice(k, 1);
+                crearExplosion(bl.x + bl.w / 2, bl.y + bl.h / 2, '#ffaa00', 16);
+              }
+              // Destruir bala al impactar bloque destructible
+              origen.balas.splice(i, 1);
+              continue;
+            } else {
+              // Muro sólido: calcular dirección de rebote
+              const distIzq = Math.abs(b.x - bl.x);
+              const distDer = Math.abs(b.x - (bl.x + bl.w));
+              const distArr = Math.abs(b.y - bl.y);
+              const distAba = Math.abs(b.y - (bl.y + bl.h));
+              const minH = Math.min(distIzq, distDer);
+              const minV = Math.min(distArr, distAba);
+
+              if (minH < minV) rebotarX = true;
+              else rebotarY = true;
+            }
+          }
+        }
+
+        // Ejecutar rebote (máximo 1 rebote)
+        if (rebotarX || rebotarY) {
+          if (b.rebotes < 1) {
+            b.rebotes++;
+            if (rebotarX) b.vx *= -1;
+            if (rebotarY) b.vy *= -1;
+            crearExplosion(b.x, b.y, b.color, 4);
+            if (typeof sonidos !== 'undefined') sonidos.click();
+          } else {
+            // Ya rebotó 1 vez -> se desvanece
+            crearExplosion(b.x, b.y, b.color, 8);
+            origen.balas.splice(i, 1);
+            continue;
+          }
+        }
+
+        // Impacto en el tanque enemigo
+        if (enemigo.invulnerable === 0) {
+          const distEnemigo = Math.hypot(b.x - enemigo.x, b.y - enemigo.y);
+          if (distEnemigo < RADIO_TANQUE + TAM_BALA / 2) {
+            // ¡Impacto!
+            enemigo.vidas--;
+            enemigo.invulnerable = 40; // Parpadeo temporal
+            actualizarVidasUI();
+            crearExplosion(enemigo.x, enemigo.y, enemigo.color, 24);
+            if (typeof sonidos !== 'undefined') sonidos.golpe();
+
+            origen.balas.splice(i, 1);
+
+            if (enemigo.vidas <= 0) {
+              finalizarPartida(origen === t1 ? 1 : 2);
+              return;
+            }
+            continue;
+          }
+        }
+      }
+    }
+
+    function finalizarPartida(ganador) {
+      jugando = false;
+      if (typeof sonidos !== 'undefined') sonidos.victoria();
+
+      transicion.mostrarVictoria({
+        titulo: `¡JUGADOR ${ganador} ES EL VENCEDOR!`,
+        lineasInfo: [
+          { label: 'JUGADOR 1', valor: `${Math.max(0, t1.vidas)} VIDAS` },
+          { label: 'JUGADOR 2', valor: `${Math.max(0, t2.vidas)} VIDAS` }
+        ],
+        onReintentar: () => iniciarPartida(),
+        urlMenu: '../index.html'
+      });
+    }
+
+    // Dibujar tanque con torreta rotada
+    function dibujarTanque(t) {
+      if (t.invulnerable > 0 && Math.floor(Date.now() / 80) % 2 === 0) return;
+
+      ctx.save();
+      ctx.translate(t.x, t.y);
+
+      // Chasis
+      ctx.save();
+      ctx.rotate(t.angulo);
+
+      ctx.fillStyle = t.color;
+      ctx.shadowColor = t.color;
+      ctx.shadowBlur = 12;
+
+      // Orugas
+      ctx.fillStyle = '#1b1b2f';
+      ctx.fillRect(-18, -16, 36, 7);
+      ctx.fillRect(-18, 9, 36, 7);
+
+      // Cuerpo
+      ctx.fillStyle = t.color;
+      ctx.fillRect(-14, -10, 28, 20);
+
+      // Cañón
+      ctx.fillStyle = '#ffe600';
+      ctx.fillRect(0, -3, 24, 6);
+
+      // Torreta central
+      ctx.fillStyle = '#0a0a18';
+      ctx.beginPath();
+      ctx.arc(0, 0, 8, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+      ctx.restore();
+    }
+
+    function dibujar() {
+      // Fondo arena
+      ctx.fillStyle = '#060515';
+      ctx.fillRect(0, 0, W, H);
+
+      // Borde exterior electrificado
+      ctx.strokeStyle = '#ffe600';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(4, 4, W - 8, H - 8);
+
+      // Bloques
+      bloques.forEach(b => {
+        ctx.save();
+        if (b.destructible) {
+          ctx.fillStyle = '#662200';
+          ctx.strokeStyle = '#ff9900';
+          ctx.lineWidth = 2;
+          ctx.fillRect(b.x, b.y, b.w, b.h);
+          ctx.strokeRect(b.x, b.y, b.w, b.h);
+
+          // Grietas si está dañado
+          if (b.vida === 1) {
+            ctx.strokeStyle = '#ffe600';
+            ctx.beginPath();
+            ctx.moveTo(b.x + 8, b.y + 8);
+            ctx.lineTo(b.x + b.w - 8, b.y + b.h - 8);
+            ctx.stroke();
+          }
+        } else {
+          ctx.fillStyle = '#14142b';
+          ctx.strokeStyle = '#00f0ff';
+          ctx.lineWidth = 3;
+          ctx.shadowColor = '#00f0ff';
+          ctx.shadowBlur = 8;
+          ctx.fillRect(b.x, b.y, b.w, b.h);
+          ctx.strokeRect(b.x, b.y, b.w, b.h);
+        }
+        ctx.restore();
+      });
+
+      // Partículas de explosión
+      particulas.forEach(p => {
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, p.size, p.size);
+      });
+
+      // Balas
+      [...t1.balas, ...t2.balas].forEach(b => {
+        ctx.save();
+        ctx.fillStyle = b.color;
+        ctx.shadowColor = b.color;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, TAM_BALA / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // Tanques
+      dibujarTanque(t1);
+      dibujarTanque(t2);
+    }
+
+    actualizarVidasUI();
+    dibujar();
+  </script>
+</body>
+</html>

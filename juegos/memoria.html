@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Memoria de Parejas - Retro Arcade</title>
+  <link rel="stylesheet" href="../css/estilos.css">
+  <link rel="stylesheet" href="../css/movil.css">
+  <style>
+    .memory-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: repeat(4, 1fr);
+      gap: 10px;
+      width: min(92vw, 440px, calc(100vh - 260px));
+      height: min(92vw, 440px, calc(100vh - 260px));
+      margin: 10px auto;
+      perspective: 1000px;
+    }
+
+    .memory-card {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+      transform-style: preserve-3d;
+      transition: transform 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .memory-card.flipped {
+      transform: rotateY(180deg);
+    }
+
+    .card-face {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
+    }
+
+    /* Reverso de la carta (Arcade Logo) */
+    .card-back {
+      background: #15112e;
+      border: 3px solid var(--neon-magenta);
+      color: var(--neon-magenta);
+      font-size: clamp(1.2rem, 3vw, 1.8rem);
+      box-shadow: 0 4px 0 #6b0035, inset 0 0 10px rgba(255, 0, 127, 0.2);
+    }
+
+    .card-back:hover {
+      border-color: var(--neon-yellow);
+      color: var(--neon-yellow);
+    }
+
+    /* Frente de la carta (Símbolo geométrico descubierto) */
+    .card-front {
+      background: #091a29;
+      border: 3px solid var(--neon-cyan);
+      transform: rotateY(180deg);
+      box-shadow: 0 4px 0 #005f66, inset 0 0 12px rgba(0, 240, 255, 0.3);
+    }
+
+    /* Pareja acertada */
+    .memory-card.matched .card-front {
+      border-color: var(--neon-green);
+      background: #07240c;
+      box-shadow: 0 0 18px var(--neon-green-glow);
+    }
+  </style>
+</head>
+<body>
+  <div class="crt-overlay" aria-hidden="true"></div>
+
+  <header class="top-controls">
+    <button type="button" class="btn-icon-arcade" id="btn-toggle-sonido" title="Sonido">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+    </button>
+  </header>
+
+  <main class="game-container">
+    <div class="game-top-bar">
+      <button type="button" class="btn-arcade btn-arcade-cyan" id="btn-back-menu" style="padding: 8px 14px; font-size: 0.65rem;">
+        &lt; MENÚ
+      </button>
+
+      <div class="game-stats">
+        <div class="stat-item">INTENTOS: <span id="stat-intentos" style="color: var(--neon-yellow);">0</span></div>
+        <div class="stat-item">PAREJAS: <span id="stat-parejas" style="color: var(--neon-green);">0/8</span></div>
+        <div class="stat-item">TIEMPO: <span id="stat-tiempo" style="color: var(--neon-cyan);">00:00</span></div>
+      </div>
+    </div>
+
+    <div class="arcade-screen" style="padding: 12px; min-height: 500px;">
+      <!-- Overlay de Inicio -->
+      <div class="game-start-overlay" id="overlay-start">
+        <div class="start-icon" style="margin-bottom: 8px;">
+          <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
+            <rect x="10" y="14" width="20" height="32" rx="3" fill="#15112e" stroke="#ff007f" stroke-width="3"/>
+            <polygon points="20,24 24,32 16,32" fill="#ffe600"/>
+            <rect x="28" y="18" width="24" height="36" rx="3" fill="#091a29" stroke="#00f0ff" stroke-width="3"/>
+            <circle cx="40" cy="36" r="6" fill="#39ff14"/>
+          </svg>
+        </div>
+        <h1 class="game-title-big">MEMORIA DE PAREJAS</h1>
+        <p class="game-instructions">
+          VOLTEA DOS CARTAS PARA ENCONTRAR SUS FIGURAS IDÉNTICAS. ¡MEMORIZA LAS POSICIONES Y COMPLETA EL TABLERO!
+        </p>
+        <button type="button" class="btn-arcade btn-arcade-green blink-text" id="btn-start-memoria" style="margin-top: 10px;">
+          > START
+        </button>
+      </div>
+
+      <!-- Cuadrícula 4x4 -->
+      <div class="memory-grid" id="memory-grid"></div>
+    </div>
+  </main>
+
+  <script src="../js/sonidos.js"></script>
+  <script src="../js/transiciones.js"></script>
+  <script src="../js/movil.js"></script>
+
+  <script>
+    /* ==========================================================================
+       LÓGICA DE MEMORIA 4X4 (FIGURAS GEOMÉTRICAS Y SÍMBOLOS RETRO)
+       ========================================================================== */
+    const FIGURAS = [
+      { id: 'estrella', svg: '<svg width="40" height="40" viewBox="0 0 24 24" fill="#ffe600"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' },
+      { id: 'corazon', svg: '<svg width="40" height="40" viewBox="0 0 24 24" fill="#ff007f"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>' },
+      { id: 'rombo', svg: '<svg width="40" height="40" viewBox="0 0 24 24" fill="#00f0ff"><polygon points="12,2 22,12 12,22 2,12"/></svg>' },
+      { id: 'circulo', svg: '<svg width="40" height="40" viewBox="0 0 24 24" fill="#39ff14"><circle cx="12" cy="12" r="9"/></svg>' },
+      { id: 'triangulo', svg: '<svg width="40" height="40" viewBox="0 0 24 24" fill="#ff9100"><polygon points="12,3 22,21 2,21"/></svg>' },
+      { id: 'cruz', svg: '<svg width="40" height="40" viewBox="0 0 24 24" fill="#b026ff"><path d="M9 2h6v7h7v6h-7v7H9v-7H2V9h7V2z"/></svg>' },
+      { id: 'cuadrado', svg: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" stroke-width="4"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>' },
+      { id: 'rayo', svg: '<svg width="40" height="40" viewBox="0 0 24 24" fill="#ffea00"><polygon points="7,2 17,2 13,10 18,10 7,22 9,13 4,13"/></svg>' }
+    ];
+
+    const gridEl = document.getElementById('memory-grid');
+    const statIntentos = document.getElementById('stat-intentos');
+    const statParejas = document.getElementById('stat-parejas');
+    const statTiempo = document.getElementById('stat-tiempo');
+    const overlayStart = document.getElementById('overlay-start');
+    const btnStart = document.getElementById('btn-start-memoria');
+    const btnBackMenu = document.getElementById('btn-back-menu');
+
+    let cartas = [];
+    let primeraCarta = null;
+    let segundaCarta = null;
+    let bloqueado = false;
+    let parejasEncontradas = 0;
+    let intentos = 0;
+    let segundos = 0;
+    let timerInterval = null;
+    let jugando = false;
+
+    btnBackMenu.addEventListener('click', () => {
+      transicion.irA('../index.html');
+    });
+
+    btnStart.addEventListener('click', () => {
+      transicion.iniciarCarga(() => {
+        overlayStart.classList.add('oculto');
+        iniciarPartida();
+      });
+    });
+
+    // Algoritmo Fisher-Yates para barajar
+    function fisherYatesShuffle(array) {
+      const arr = [...array];
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function iniciarPartida() {
+      parejasEncontradas = 0;
+      intentos = 0;
+      segundos = 0;
+      primeraCarta = null;
+      segundaCarta = null;
+      bloqueado = false;
+
+      statIntentos.textContent = '0';
+      statParejas.textContent = '0/8';
+      statTiempo.textContent = '00:00';
+
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        segundos++;
+        const mins = String(Math.floor(segundos / 60)).padStart(2, '0');
+        const secs = String(segundos % 60).padStart(2, '0');
+        statTiempo.textContent = `${mins}:${secs}`;
+      }, 1000);
+
+      // Crear 16 cartas (8 pares) y barajarlas
+      const baraja = fisherYatesShuffle([...FIGURAS, ...FIGURAS]);
+      gridEl.innerHTML = '';
+
+      cartas = baraja.map((figura, index) => {
+        const cartaWrap = document.createElement('div');
+        cartaWrap.className = 'memory-card';
+        cartaWrap.dataset.figuraId = figura.id;
+        cartaWrap.dataset.index = index;
+
+        cartaWrap.innerHTML = `
+          <div class="card-face card-back">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="#ff007f">
+              <rect x="5" y="5" width="14" height="14" rx="2" fill="none" stroke="#ff007f" stroke-width="2"/>
+              <path d="M12 7c-1.66 0-3 1.34-3 3h2c0-.55.45-1 1-1s1 .45 1 1c0 1-1.5 1.5-1.5 3h1.5c0-.85 1.5-1.3 1.5-3 0-1.66-1.34-3-3-3zm-.75 8.5v1.5h1.5v-1.5h-1.5z"/>
+            </svg>
+          </div>
+          <div class="card-face card-front">${figura.svg}</div>
+        `;
+
+        cartaWrap.addEventListener('click', () => voltearCarta(cartaWrap));
+        gridEl.appendChild(cartaWrap);
+        return cartaWrap;
+      });
+
+      jugando = true;
+    }
+
+    function voltearCarta(cartaEl) {
+      if (!jugando || bloqueado) return;
+      if (cartaEl.classList.contains('flipped') || cartaEl.classList.contains('matched')) return;
+
+      cartaEl.classList.add('flipped');
+      if (typeof sonidos !== 'undefined') sonidos.bip();
+
+      if (!primeraCarta) {
+        primeraCarta = cartaEl;
+      } else {
+        segundaCarta = cartaEl;
+        intentos++;
+        statIntentos.textContent = intentos;
+        verificarCoincidencia();
+      }
+    }
+
+    function verificarCoincidencia() {
+      const coincide = primeraCarta.dataset.figuraId === segundaCarta.dataset.figuraId;
+
+      if (coincide) {
+        // Acierto
+        primeraCarta.classList.add('matched');
+        segundaCarta.classList.add('matched');
+        parejasEncontradas++;
+        statParejas.textContent = `${parejasEncontradas}/8`;
+        if (typeof sonidos !== 'undefined') sonidos.punto();
+
+        resetSeleccion();
+
+        if (parejasEncontradas === 8) {
+          finalizarVictoria();
+        }
+      } else {
+        // Error: Voltear de nuevo tras 0.9s
+        bloqueado = true;
+        setTimeout(() => {
+          if (primeraCarta) primeraCarta.classList.remove('flipped');
+          if (segundaCarta) segundaCarta.classList.remove('flipped');
+          if (typeof sonidos !== 'undefined') sonidos.click();
+          resetSeleccion();
+        }, 900);
+      }
+    }
+
+    function resetSeleccion() {
+      primeraCarta = null;
+      segundaCarta = null;
+      bloqueado = false;
+    }
+
+    function finalizarVictoria() {
+      jugando = false;
+      clearInterval(timerInterval);
+
+      transicion.mostrarVictoria({
+        titulo: '¡TABLERO COMPLETADO!',
+        lineasInfo: [
+          { label: 'TIEMPO', valor: statTiempo.textContent },
+          { label: 'INTENTOS', valor: intentos }
+        ],
+        onReintentar: () => iniciarPartida(),
+        urlMenu: '../index.html'
+      });
+    }
+  </script>
+</body>
+</html>

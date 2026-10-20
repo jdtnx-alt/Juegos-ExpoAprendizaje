@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Puzzle Deslizante - Retro Arcade</title>
+  <link rel="stylesheet" href="../css/estilos.css">
+  <link rel="stylesheet" href="../css/movil.css">
+  <style>
+    /* Estilos específicos de Puzzle Deslizante */
+    .puzzle-board {
+      width: min(88vw, 360px, calc(100vh - 300px));
+      height: min(88vw, 360px, calc(100vh - 300px));
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: 6px;
+      background: #000;
+      border: 4px solid var(--neon-cyan);
+      padding: 6px;
+      box-shadow: 0 0 25px var(--neon-cyan-glow);
+      margin: 12px auto;
+    }
+
+    .puzzle-tile {
+      background: #121029;
+      border: 3px solid var(--neon-magenta);
+      color: var(--neon-yellow);
+      font-size: clamp(1.4rem, 4vw, 2.2rem);
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 4px 0 #80003f, inset 0 0 10px rgba(255, 0, 127, 0.3);
+      text-shadow: 0 0 8px var(--neon-yellow-glow);
+      transition: transform 0.08s, background 0.08s;
+      border-radius: 4px;
+    }
+
+    .puzzle-tile:hover {
+      background: #2b0d26;
+      border-color: var(--neon-yellow);
+    }
+
+    .puzzle-tile:active {
+      transform: scale(0.95);
+    }
+
+    .puzzle-tile.empty {
+      background: transparent;
+      border: 2px dashed rgba(255, 255, 255, 0.08);
+      box-shadow: none;
+      cursor: default;
+    }
+
+    .puzzle-controls {
+      display: flex;
+      gap: 12px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <!-- Filtro CRT -->
+  <div class="crt-overlay" aria-hidden="true"></div>
+
+  <!-- Barra de controles superior -->
+  <header class="top-controls">
+    <button type="button" class="btn-icon-arcade" id="btn-toggle-sonido" title="Sonido">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+    </button>
+  </header>
+
+  <main class="game-container">
+    <!-- Barra de estado -->
+    <div class="game-top-bar">
+      <button type="button" class="btn-arcade btn-arcade-cyan" id="btn-back-menu" style="padding: 8px 14px; font-size: 0.65rem;">
+        &lt; MENÚ
+      </button>
+
+      <div class="game-stats">
+        <div class="stat-item">PASOS: <span id="stat-moves">0</span></div>
+        <div class="stat-item">TIEMPO: <span id="stat-time">00:00</span></div>
+      </div>
+    </div>
+
+    <!-- Pantalla Arcade -->
+    <div class="arcade-screen" style="padding: 16px; min-height: 480px;">
+      <!-- Overlay Previo de Inicio -->
+      <div class="game-start-overlay" id="overlay-start">
+        <div class="start-icon" style="margin-bottom: 8px;">
+          <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
+            <rect x="10" y="10" width="20" height="20" rx="3" fill="#121029" stroke="#00f0ff" stroke-width="3"/>
+            <text x="20" y="25" fill="#ffe600" font-size="12" font-family="monospace" font-weight="bold" text-anchor="middle">1</text>
+            <rect x="34" y="10" width="20" height="20" rx="3" fill="#121029" stroke="#00f0ff" stroke-width="3"/>
+            <text x="44" y="25" fill="#ffe600" font-size="12" font-family="monospace" font-weight="bold" text-anchor="middle">2</text>
+            <rect x="10" y="34" width="20" height="20" rx="3" fill="#121029" stroke="#00f0ff" stroke-width="3"/>
+            <text x="20" y="49" fill="#ffe600" font-size="12" font-family="monospace" font-weight="bold" text-anchor="middle">3</text>
+            <rect x="34" y="34" width="20" height="20" rx="3" fill="transparent" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-dasharray="3 3"/>
+          </svg>
+        </div>
+        <h1 class="game-title-big">PUZZLE 3X3</h1>
+        <p class="game-instructions">
+          DESLIZA LAS CASILLAS PARA ORDENAR LOS NÚMEROS DEL 1 AL 8. ¡EL HUECO DEBE QUEDAR AL FINAL!
+        </p>
+        <button type="button" class="btn-arcade btn-arcade-green blink-text" id="btn-start-puzzle">
+          > START
+        </button>
+      </div>
+
+      <!-- Tablero del Puzzle -->
+      <div class="puzzle-board" id="board"></div>
+
+      <!-- Botones de acción -->
+      <div class="puzzle-controls">
+        <button type="button" class="btn-arcade btn-arcade-yellow" id="btn-mezclar" style="font-size: 0.72rem;">
+          [ MEZCLAR ]
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Scripts compartidos -->
+  <script src="../js/sonidos.js"></script>
+  <script src="../js/transiciones.js"></script>
+  <script src="../js/movil.js"></script>
+
+  <script>
+    /* ==========================================================================
+       LÓGICA DEL PUZZLE DESLIZANTE 3X3 (SIEMPRE RESOLUBLE)
+       ========================================================================== */
+    const CONFIG = {
+      FILAS: 3,
+      COLUMNAS: 3,
+      MOVIMIENTOS_MEZCLA: 80 // Mezcla aleatoria válida para garantizar solución
+    };
+
+    let estado = [1, 2, 3, 4, 5, 6, 7, 8, 0]; // 0 representa la casilla vacía
+    let movimientos = 0;
+    let segundos = 0;
+    let timerInterval = null;
+    let jugando = false;
+
+    const boardEl = document.getElementById('board');
+    const statMoves = document.getElementById('stat-moves');
+    const statTime = document.getElementById('stat-time');
+    const overlayStart = document.getElementById('overlay-start');
+    const btnStart = document.getElementById('btn-start-puzzle');
+    const btnMezclar = document.getElementById('btn-mezclar');
+    const btnBackMenu = document.getElementById('btn-back-menu');
+
+    // Botón Menú
+    btnBackMenu.addEventListener('click', () => {
+      transicion.irA('../index.html');
+    });
+
+    // Iniciar con la secuencia Arcade
+    btnStart.addEventListener('click', () => {
+      transicion.iniciarCarga(() => {
+        overlayStart.classList.add('oculto');
+        iniciarPartida();
+      });
+    });
+
+    btnMezclar.addEventListener('click', () => {
+      if (typeof sonidos !== 'undefined') sonidos.click();
+      iniciarPartida();
+    });
+
+    function iniciarPartida() {
+      movimientos = 0;
+      segundos = 0;
+      statMoves.textContent = movimientos;
+      statTime.textContent = '00:00';
+      clearInterval(timerInterval);
+
+      mezclarSoluble();
+      renderizarTablero();
+      jugando = true;
+
+      timerInterval = setInterval(() => {
+        segundos++;
+        const mins = String(Math.floor(segundos / 60)).padStart(2, '0');
+        const secs = String(segundos % 60).padStart(2, '0');
+        statTime.textContent = `${mins}:${secs}`;
+      }, 1000);
+    }
+
+    // Mezcla haciendo movimientos legales desde el estado ordenado
+    function mezclarSoluble() {
+      estado = [1, 2, 3, 4, 5, 6, 7, 8, 0];
+      let vacioIndex = 8;
+      let ultimoMovimiento = -1;
+
+      for (let i = 0; i < CONFIG.MOVIMIENTOS_MEZCLA; i++) {
+        const vecinos = obtenerVecinosValidos(vacioIndex).filter(idx => idx !== ultimoMovimiento);
+        const elegido = vecinos[Math.floor(Math.random() * vecinos.length)];
+
+        // Intercambiar
+        estado[vacioIndex] = estado[elegido];
+        estado[elegido] = 0;
+        ultimoMovimiento = vacioIndex;
+        vacioIndex = elegido;
+      }
+    }
+
+    function obtenerVecinosValidos(idx) {
+      const fila = Math.floor(idx / 3);
+      const col = idx % 3;
+      const vecinos = [];
+
+      if (fila > 0) vecinos.push(idx - 3); // Arriba
+      if (fila < 2) vecinos.push(idx + 3); // Abajo
+      if (col > 0) vecinos.push(idx - 1);  // Izquierda
+      if (col < 2) vecinos.push(idx + 1);  // Derecha
+
+      return vecinos;
+    }
+
+    function renderizarTablero() {
+      boardEl.innerHTML = '';
+      estado.forEach((valor, index) => {
+        const tile = document.createElement('div');
+        tile.className = 'puzzle-tile' + (valor === 0 ? ' empty' : '');
+        tile.textContent = valor === 0 ? '' : valor;
+
+        if (valor !== 0) {
+          tile.addEventListener('click', () => intentarMover(index));
+        }
+        boardEl.appendChild(tile);
+      });
+    }
+
+    function intentarMover(idx) {
+      if (!jugando) return;
+      const vacioIndex = estado.indexOf(0);
+      const vecinos = obtenerVecinosValidos(vacioIndex);
+
+      if (vecinos.includes(idx)) {
+        // Mover
+        estado[vacioIndex] = estado[idx];
+        estado[idx] = 0;
+        movimientos++;
+        statMoves.textContent = movimientos;
+        if (typeof sonidos !== 'undefined') sonidos.mover();
+
+        renderizarTablero();
+        comprobarVictoria();
+      }
+    }
+
+    function comprobarVictoria() {
+      const victoria = [1, 2, 3, 4, 5, 6, 7, 8, 0].every((v, i) => estado[i] === v);
+      if (victoria) {
+        jugando = false;
+        clearInterval(timerInterval);
+
+        transicion.mostrarVictoria({
+          titulo: '¡PUZZLE RESUELTO!',
+          lineasInfo: [
+            { label: 'TIEMPO', valor: statTime.textContent },
+            { label: 'PASOS', valor: movimientos }
+          ],
+          onReintentar: () => iniciarPartida(),
+          urlMenu: '../index.html'
+        });
+      }
+    }
+
+    // Dibujar tablero inicial
+    renderizarTablero();
+  </script>
+</body>
+</html>

@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Laberinto Contrarreloj - Retro Arcade</title>
+  <link rel="stylesheet" href="../css/estilos.css">
+  <link rel="stylesheet" href="../css/movil.css">
+  <style>
+    .maze-canvas-wrap {
+      width: min(94vw, 680px);
+      aspect-ratio: 4 / 3;
+      max-height: calc(100vh - 260px);
+      position: relative;
+      background: #000;
+      border: 4px solid var(--neon-cyan);
+      box-shadow: 0 0 25px var(--neon-cyan-glow);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      margin: 4px auto;
+    }
+
+    #maze-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+    }
+
+    /* D-PAD táctil arcade */
+    .d-pad-container {
+      display: grid;
+      grid-template-columns: repeat(3, 56px);
+      grid-template-rows: repeat(3, 50px);
+      gap: 6px;
+      margin: 8px auto;
+      justify-content: center;
+    }
+
+    .d-btn {
+      background: #14102e;
+      border: 2px solid var(--neon-cyan);
+      color: var(--neon-cyan);
+      font-size: 1.1rem;
+      font-family: inherit;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 4px 0 #005f66;
+    }
+    .d-btn:active {
+      transform: translateY(3px);
+      box-shadow: 0 1px 0 #005f66;
+    }
+    .d-btn.up { grid-column: 2; grid-row: 1; }
+    .d-btn.left { grid-column: 1; grid-row: 2; }
+    .d-btn.down { grid-column: 2; grid-row: 2; }
+    .d-btn.right { grid-column: 3; grid-row: 2; }
+  </style>
+</head>
+<body>
+  <div class="crt-overlay" aria-hidden="true"></div>
+
+  <header class="top-controls">
+    <button type="button" class="btn-icon-arcade" id="btn-toggle-sonido" title="Sonido">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+    </button>
+  </header>
+
+  <main class="game-container">
+    <div class="game-top-bar">
+      <button type="button" class="btn-arcade btn-arcade-cyan" id="btn-back-menu" style="padding: 8px 14px; font-size: 0.65rem;">
+        &lt; MENÚ
+      </button>
+
+      <div class="game-stats">
+        <div class="stat-item">NIVEL: <span id="stat-nivel" style="color: var(--neon-yellow);">1</span></div>
+        <div class="stat-item">TIEMPO: <span id="stat-tiempo" style="color: var(--neon-magenta);">35</span>s</div>
+        <div class="stat-item">RÉCORD: <span id="stat-record" style="color: var(--neon-green);">NIVEL 1</span></div>
+      </div>
+    </div>
+
+    <div class="arcade-screen" style="padding: 10px;">
+      <!-- Overlay de Inicio -->
+      <div class="game-start-overlay" id="overlay-start">
+        <div class="start-icon" style="margin-bottom: 8px;">
+          <svg width="60" height="60" viewBox="0 0 64 64" fill="none">
+            <rect x="8" y="8" width="48" height="48" stroke="#00f0ff" stroke-width="4" fill="#0b0a1d"/>
+            <line x1="20" y1="8" x2="20" y2="36" stroke="#00f0ff" stroke-width="4"/>
+            <line x1="20" y1="36" x2="44" y2="36" stroke="#00f0ff" stroke-width="4"/>
+            <line x1="36" y1="20" x2="56" y2="20" stroke="#00f0ff" stroke-width="4"/>
+            <circle cx="14" cy="14" r="4" fill="#ffe600"/>
+            <rect x="48" y="46" width="6" height="6" fill="#39ff14"/>
+          </svg>
+        </div>
+        <h1 class="game-title-big">LABERINTO RETRO</h1>
+        <p class="game-instructions">
+          USA <b>[FLECHAS]</b>, <b>[WASD]</b> O LA CRUCETA TÁCTIL. ¡LLEGA DESDE EL PUNTO AMARILLO HASTA LA META VERDE ANTES DE QUE SE AGOTE EL TIEMPO!
+        </p>
+        <button type="button" class="btn-arcade btn-arcade-green blink-text" id="btn-start-maze" style="margin-top: 10px;">
+          > START
+        </button>
+      </div>
+
+      <div class="maze-canvas-wrap">
+        <canvas id="maze-canvas" width="680" height="510"></canvas>
+      </div>
+
+      <!-- Controles en pantalla (D-PAD) -->
+      <div class="d-pad-container" id="dpad">
+        <button type="button" class="d-btn up" id="btn-up" aria-label="Arriba">^</button>
+        <button type="button" class="d-btn left" id="btn-left" aria-label="Izquierda">&lt;</button>
+        <button type="button" class="d-btn down" id="btn-down" aria-label="Abajo">v</button>
+        <button type="button" class="d-btn right" id="btn-right" aria-label="Derecha">&gt;</button>
+      </div>
+    </div>
+  </main>
+
+  <script src="../js/sonidos.js"></script>
+  <script src="../js/transiciones.js"></script>
+  <script src="../js/movil.js"></script>
+
+  <script>
+    /* ==========================================================================
+       CONSTANTES CONFIGURABLES DEL LABERINTO CONTRARRELOJ
+       ========================================================================== */
+    const TIEMPO_INICIAL_SEGUNDOS = 35;       // Tiempo de partida
+    const TIEMPO_BONUS_NIVEL = 15;            // Tiempo extra ganado al resolver un laberinto
+    const COLUMNAS_BASE = 13;                 // Número impar para backtracking
+    const FILAS_BASE = 9;                     // Número impar para backtracking
+    const MAX_COLUMNAS = 23;                  // Tamaño máximo en pantalla
+    const MAX_FILAS = 17;
+
+    const canvas = document.getElementById('maze-canvas');
+    const ctx = canvas.getContext('2d');
+
+    const statNivel = document.getElementById('stat-nivel');
+    const statTiempo = document.getElementById('stat-tiempo');
+    const statRecord = document.getElementById('stat-record');
+    const overlayStart = document.getElementById('overlay-start');
+    const btnStart = document.getElementById('btn-start-maze');
+    const btnBackMenu = document.getElementById('btn-back-menu');
+
+    const W = 680;
+    const H = 510;
+
+    let nivel = 1;
+    let recordNivel = 1;
+    let tiempoRestante = TIEMPO_INICIAL_SEGUNDOS;
+    let timerInterval = null;
+    let jugando = false;
+    let particulasMeta = [];
+
+    // Estado del laberinto
+    let cols = COLUMNAS_BASE;
+    let rows = FILAS_BASE;
+    let grid = []; // 0: camino, 1: pared
+    let celdaW = 0;
+    let celdaH = 0;
+
+    // Posición jugador y meta
+    const jugador = { x: 1, y: 1 };
+    const meta = { x: 1, y: 1 };
+
+    btnBackMenu.addEventListener('click', () => {
+      transicion.irA('../index.html');
+    });
+
+    btnStart.addEventListener('click', () => {
+      transicion.iniciarCarga(() => {
+        overlayStart.classList.add('oculto');
+        iniciarPartida();
+      });
+    });
+
+    // Algoritmo de backtracking recursivo (Garantiza solución perfecta)
+    function generarLaberinto(c, r) {
+      // Inicializar todo como pared (1)
+      const g = Array.from({ length: r }, () => Array(c).fill(1));
+
+      function tallar(cx, cy) {
+        g[cy][cx] = 0;
+
+        // 4 direcciones aleatorias (paso de 2 casillas)
+        const dirs = [
+          [0, -2], [0, 2], [-2, 0], [2, 0]
+        ].sort(() => Math.random() - 0.5);
+
+        for (let [dx, dy] of dirs) {
+          const nx = cx + dx;
+          const ny = cy + dy;
+
+          if (nx > 0 && nx < c - 1 && ny > 0 && ny < r - 1 && g[ny][nx] === 1) {
+            // Abrir paso intermedio y avanzar
+            g[cy + dy / 2][cx + dx / 2] = 0;
+            tallar(nx, ny);
+          }
+        }
+      }
+
+      tallar(1, 1);
+      return g;
+    }
+
+    function cargarNivel(numNivel) {
+      // Ajustar dimensiones según el nivel (siempre impares)
+      cols = Math.min(MAX_COLUMNAS, COLUMNAS_BASE + Math.floor((numNivel - 1) / 2) * 2);
+      rows = Math.min(MAX_FILAS, FILAS_BASE + Math.floor((numNivel - 1) / 2) * 2);
+
+      grid = generarLaberinto(cols, rows);
+
+      celdaW = W / cols;
+      celdaH = H / rows;
+
+      jugador.x = 1;
+      jugador.y = 1;
+
+      // Meta en la esquina opuesta garantizada
+      meta.x = cols - 2;
+      meta.y = rows - 2;
+      grid[meta.y][meta.x] = 0;
+
+      statNivel.textContent = numNivel;
+      particulasMeta = [];
+      dibujar();
+    }
+
+    function iniciarPartida() {
+      nivel = 1;
+      tiempoRestante = TIEMPO_INICIAL_SEGUNDOS;
+      statTiempo.textContent = tiempoRestante;
+      statTiempo.style.color = 'var(--neon-magenta)';
+      jugando = true;
+
+      cargarNivel(nivel);
+
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        if (!jugando) return;
+        tiempoRestante--;
+        statTiempo.textContent = tiempoRestante;
+
+        if (tiempoRestante <= 5) {
+          statTiempo.style.color = '#ff0033';
+          if (typeof sonidos !== 'undefined') sonidos.bip();
+        } else {
+          statTiempo.style.color = 'var(--neon-magenta)';
+        }
+
+        if (tiempoRestante <= 0) {
+          tiempoAgotado();
+        }
+      }, 1000);
+    }
+
+    function moverJugador(dx, dy) {
+      if (!jugando) return;
+
+      const nx = jugador.x + dx;
+      const ny = jugador.y + dy;
+
+      if (nx >= 0 && nx < cols && ny >= 0 && ny < rows && grid[ny][nx] === 0) {
+        jugador.x = nx;
+        jugador.y = ny;
+        if (typeof sonidos !== 'undefined') sonidos.mover();
+
+        // Comprobar llegada a la meta
+        if (jugador.x === meta.x && jugador.y === meta.y) {
+          nivelSuperado();
+          return;
+        }
+
+        dibujar();
+      }
+    }
+
+    function nivelSuperado() {
+      if (typeof sonidos !== 'undefined') sonidos.punto();
+
+      nivel++;
+      tiempoRestante += TIEMPO_BONUS_NIVEL;
+      statTiempo.textContent = tiempoRestante;
+
+      // Efecto de celebración
+      crearParticulasMeta(meta.x * celdaW + celdaW / 2, meta.y * celdaH + celdaH / 2);
+
+      if (nivel > recordNivel) {
+        recordNivel = nivel;
+        statRecord.textContent = `NIVEL ${recordNivel}`;
+      }
+
+      setTimeout(() => {
+        if (jugando) cargarNivel(nivel);
+      }, 350);
+    }
+
+    function tiempoAgotado() {
+      jugando = false;
+      clearInterval(timerInterval);
+      if (typeof sonidos !== 'undefined') sonidos.gameOver();
+
+      transicion.mostrarGameOver({
+        puntos: `NIVEL ${nivel}`,
+        record: `RÉCORD: NIVEL ${recordNivel}`,
+        onReintentar: () => iniciarPartida(),
+        urlMenu: '../index.html'
+      });
+    }
+
+    function crearParticulasMeta(x, y) {
+      for (let i = 0; i < 20; i++) {
+        particulasMeta.push({
+          x: x,
+          y: y,
+          vx: (Math.random() - 0.5) * 6,
+          vy: (Math.random() - 0.5) * 6,
+          color: '#39ff14',
+          vida: 18
+        });
+      }
+    }
+
+    // Controles teclado
+    window.addEventListener('keydown', (e) => {
+      if (!jugando) return;
+      if (['ArrowUp', 'KeyW'].includes(e.code)) { e.preventDefault(); moverJugador(0, -1); }
+      else if (['ArrowDown', 'KeyS'].includes(e.code)) { e.preventDefault(); moverJugador(0, 1); }
+      else if (['ArrowLeft', 'KeyA'].includes(e.code)) { e.preventDefault(); moverJugador(-1, 0); }
+      else if (['ArrowRight', 'KeyD'].includes(e.code)) { e.preventDefault(); moverJugador(1, 0); }
+    });
+
+    // D-PAD Táctil con respuesta instantánea y repetición al mantener presionado
+    const esTactilLaberinto = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+    if (esTactilLaberinto) {
+      const configurarBotonDpad = (id, dx, dy) => {
+        const b = document.getElementById(id);
+        if (!b) return;
+
+        let intervalId = null;
+        let timeoutId = null;
+
+        const parar = () => {
+          if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+          if (intervalId) { clearInterval(intervalId); intervalId = null; }
+        };
+
+        const empezar = (e) => {
+          e.preventDefault();
+          parar();
+          moverJugador(dx, dy);
+          // Retardo inicial de 200ms y repetición cada 125ms
+          timeoutId = setTimeout(() => {
+            intervalId = setInterval(() => {
+              moverJugador(dx, dy);
+            }, 125);
+          }, 200);
+        };
+
+        b.addEventListener('pointerdown', empezar);
+        b.addEventListener('pointerup', parar);
+        b.addEventListener('pointercancel', parar);
+        b.addEventListener('pointerleave', parar);
+        b.addEventListener('click', (e) => e.preventDefault());
+      };
+      configurarBotonDpad('btn-up', 0, -1);
+      configurarBotonDpad('btn-down', 0, 1);
+      configurarBotonDpad('btn-left', -1, 0);
+      configurarBotonDpad('btn-right', 1, 0);
+
+      // Soporte táctil por deslizamiento directo sobre el laberinto
+      let touchStartX = 0;
+      let touchStartY = 0;
+      canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length > 0) {
+          touchStartX = e.touches[0].clientX;
+          touchStartY = e.touches[0].clientY;
+        }
+      }, { passive: true });
+      canvas.addEventListener('touchmove', (e) => {
+        if (!jugando || e.touches.length === 0) return;
+        const dx = e.touches[0].clientX - touchStartX;
+        const dy = e.touches[0].clientY - touchStartY;
+        const umbral = Math.max(16, Math.min(celdaW, celdaH) * 0.4);
+        if (Math.abs(dx) > umbral || Math.abs(dy) > umbral) {
+          if (Math.abs(dx) > Math.abs(dy)) {
+            moverJugador(dx > 0 ? 1 : -1, 0);
+          } else {
+            moverJugador(0, dy > 0 ? 1 : -1);
+          }
+          touchStartX = e.touches[0].clientX;
+          touchStartY = e.touches[0].clientY;
+        }
+      }, { passive: true });
+    }
+
+    function dibujar() {
+      // Fondo
+      ctx.fillStyle = '#060414';
+      ctx.fillRect(0, 0, W, H);
+
+      // Dibujar laberinto
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (grid[r][c] === 1) {
+            // Muro neón cian
+            ctx.fillStyle = '#0d1326';
+            ctx.fillRect(c * celdaW, r * celdaH, celdaW, celdaH);
+
+            ctx.strokeStyle = '#00f0ff';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(c * celdaW, r * celdaH, celdaW, celdaH);
+          }
+        }
+      }
+
+      // Meta (Cuadrado neón verde brillante pulsante)
+      const parpadeo = Math.sin(Date.now() / 120) > 0;
+      ctx.save();
+      ctx.fillStyle = parpadeo ? '#39ff14' : '#1e800a';
+      ctx.shadowColor = '#39ff14';
+      ctx.shadowBlur = 12;
+      ctx.fillRect(meta.x * celdaW + 3, meta.y * celdaH + 3, celdaW - 6, celdaH - 6);
+
+      // Símbolo interior de meta
+      ctx.fillStyle = '#000';
+      ctx.fillRect(meta.x * celdaW + celdaW / 2 - 3, meta.y * celdaH + celdaH / 2 - 3, 6, 6);
+      ctx.restore();
+
+      // Jugador (Personaje neón amarillo pixelado)
+      ctx.save();
+      const px = jugador.x * celdaW;
+      const py = jugador.y * celdaH;
+
+      ctx.fillStyle = '#ffe600';
+      ctx.shadowColor = '#ffe600';
+      ctx.shadowBlur = 14;
+      ctx.fillRect(px + 4, py + 4, celdaW - 8, celdaH - 8);
+
+      // Ojos del personaje
+      ctx.fillStyle = '#000';
+      const ojoSize = Math.max(2, Math.floor(celdaW / 6));
+      ctx.fillRect(px + celdaW * 0.28, py + celdaH * 0.3, ojoSize, ojoSize);
+      ctx.fillRect(px + celdaW * 0.62, py + celdaH * 0.3, ojoSize, ojoSize);
+      ctx.restore();
+
+      // Partículas
+      for (let i = particulasMeta.length - 1; i >= 0; i--) {
+        const p = particulasMeta[i];
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, 4, 4);
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vida--;
+        if (p.vida <= 0) particulasMeta.splice(i, 1);
+      }
+    }
+
+    cargarNivel(1);
+  </script>
+</body>
+</html>

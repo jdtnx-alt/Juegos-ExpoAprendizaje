@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Esquiva Obstáculos - Retro Arcade</title>
+  <link rel="stylesheet" href="../css/estilos.css">
+  <link rel="stylesheet" href="../css/movil.css">
+  <style>
+    .runner-canvas-wrap {
+      width: min(94vw, 760px);
+      aspect-ratio: 16 / 9;
+      max-height: calc(100vh - 200px);
+      position: relative;
+      background: #000;
+      border: 4px solid var(--neon-green);
+      box-shadow: 0 0 25px var(--neon-green-glow);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    #runner-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+    }
+
+    /* Botón flotante para pantallas táctiles */
+    .mobile-jump-zone {
+      position: absolute;
+      bottom: 12px;
+      right: 12px;
+      z-index: 20;
+      background: rgba(57, 255, 20, 0.2);
+      border: 3px solid var(--neon-green);
+      color: var(--neon-green);
+      padding: 14px 22px;
+      font-size: 0.85rem;
+      border-radius: 6px;
+      box-shadow: 0 0 15px var(--neon-green-glow);
+    }
+  </style>
+</head>
+<body>
+  <div class="crt-overlay" aria-hidden="true"></div>
+
+  <header class="top-controls">
+    <button type="button" class="btn-icon-arcade" id="btn-toggle-sonido" title="Sonido">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+    </button>
+  </header>
+
+  <main class="game-container">
+    <div class="game-top-bar">
+      <button type="button" class="btn-arcade btn-arcade-cyan" id="btn-back-menu" style="padding: 8px 14px; font-size: 0.65rem;">
+        &lt; MENÚ
+      </button>
+
+      <div class="game-stats">
+        <div class="stat-item">METROS: <span id="stat-distancia" style="color: var(--neon-green);">0</span> m</div>
+        <div class="stat-item">RÉCORD: <span id="stat-record" style="color: var(--neon-yellow);">0</span> m</div>
+      </div>
+    </div>
+
+    <div class="arcade-screen" style="padding: 10px;">
+      <!-- Overlay de Inicio -->
+      <div class="game-start-overlay" id="overlay-start">
+        <div class="start-icon" style="margin-bottom: 8px;">
+          <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
+            <rect x="24" y="12" width="28" height="20" fill="#39ff14"/>
+            <rect x="44" y="16" width="4" height="4" fill="#000"/>
+            <rect x="14" y="24" width="24" height="22" fill="#39ff14"/>
+            <rect x="8" y="28" width="6" height="8" fill="#39ff14"/>
+            <rect x="18" y="46" width="6" height="12" fill="#39ff14"/>
+            <rect x="28" y="46" width="6" height="12" fill="#39ff14"/>
+          </svg>
+        </div>
+        <h1 class="game-title-big">ESQUIVA OBSTÁCULOS</h1>
+        <p class="game-instructions">
+          SALTA CON <b>[ESPACIO]</b>, <b>[FLECHA ARRIBA]</b> O TOCANDO LA PANTALLA. ¡EVITA CACTUS, ROCAS Y MURCIÉLAGOS!
+        </p>
+        <button type="button" class="btn-arcade btn-arcade-green blink-text" id="btn-start-runner" style="margin-top: 10px;">
+          > START
+        </button>
+      </div>
+
+      <div class="runner-canvas-wrap" id="canvas-wrap">
+        <canvas id="runner-canvas" width="800" height="450"></canvas>
+      </div>
+    </div>
+  </main>
+
+  <script src="../js/sonidos.js"></script>
+  <script src="../js/transiciones.js"></script>
+  <script src="../js/movil.js"></script>
+
+  <script>
+    /* ==========================================================================
+       LÓGICA DE CORREDOR AUTOMÁTICO RETRO (RUNNER INFINITO)
+       ========================================================================== */
+    const canvas = document.getElementById('runner-canvas');
+    const ctx = canvas.getContext('2d');
+
+    const statDistancia = document.getElementById('stat-distancia');
+    const statRecord = document.getElementById('stat-record');
+    const overlayStart = document.getElementById('overlay-start');
+    const btnStart = document.getElementById('btn-start-runner');
+    const btnBackMenu = document.getElementById('btn-back-menu');
+
+    const W = 800;
+    const H = 450;
+    const SUELO_Y = 360;
+
+    let recordMetros = 0;
+    let distancia = 0;
+    let velocidad = 6;
+    let loopId = null;
+    let jugando = false;
+
+    // Personaje (Dinosaurio Pixelado)
+    const dino = {
+      x: 70,
+      y: SUELO_Y - 46,
+      ancho: 42,
+      alto: 46,
+      vy: 0,
+      gravedad: 0.78,
+      saltoFuerza: -15,
+      enSuelo: true
+    };
+
+    // Obstáculos
+    let obstaculos = [];
+    let tiempoHastaSiguienteObstaculo = 0;
+
+    // Parallax: capas de fondo
+    let estrellas = [];
+    for (let i = 0; i < 35; i++) {
+      estrellas.push({
+        x: Math.random() * W,
+        y: Math.random() * (SUELO_Y - 80),
+        size: Math.random() > 0.7 ? 3 : 1.5,
+        speed: Math.random() * 0.8 + 0.3
+      });
+    }
+
+    let montanas = [];
+    for (let i = 0; i < 6; i++) {
+      montanas.push({
+        x: i * 160,
+        ancho: 160,
+        alto: 80 + Math.random() * 50
+      });
+    }
+
+    btnBackMenu.addEventListener('click', () => {
+      transicion.irA('../index.html');
+    });
+
+    btnStart.addEventListener('click', () => {
+      transicion.iniciarCarga(() => {
+        overlayStart.classList.add('oculto');
+        iniciarPartida();
+      });
+    });
+
+    function iniciarPartida() {
+      distancia = 0;
+      velocidad = 6.2;
+      obstaculos = [];
+      tiempoHastaSiguienteObstaculo = 60;
+
+      dino.y = SUELO_Y - dino.alto;
+      dino.vy = 0;
+      dino.enSuelo = true;
+
+      statDistancia.textContent = '0';
+      jugando = true;
+
+      if (loopId) cancelAnimationFrame(loopId);
+      bucle();
+    }
+
+    function saltar() {
+      if (!jugando) return;
+      if (dino.enSuelo) {
+        dino.vy = dino.saltoFuerza;
+        dino.enSuelo = false;
+        if (typeof sonidos !== 'undefined') sonidos.salto();
+      }
+    }
+
+    // Controles
+    window.addEventListener('keydown', (e) => {
+      if (['Space', 'ArrowUp', 'KeyW'].includes(e.code)) {
+        e.preventDefault();
+        saltar();
+      }
+    });
+
+    if (window.matchMedia('(hover: none) and (pointer: coarse)').matches) {
+      canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        saltar();
+      }, { passive: false });
+    }
+
+    canvas.addEventListener('mousedown', () => saltar());
+
+    // Generador de obstáculos aleatorios pero superables
+    function generarObstaculo() {
+      const tipos = [
+        { tipo: 'cactus_simple', ancho: 26, alto: 48, y: SUELO_Y - 48 },
+        { tipo: 'cactus_doble', ancho: 48, alto: 48, y: SUELO_Y - 48 },
+        { tipo: 'roca', ancho: 36, alto: 32, y: SUELO_Y - 32 },
+        { tipo: 'ave', ancho: 38, alto: 26, y: SUELO_Y - 76 } // Volador
+      ];
+
+      const elegido = tipos[Math.floor(Math.random() * tipos.length)];
+      obstaculos.push({
+        x: W + 20,
+        y: elegido.y,
+        ancho: elegido.ancho,
+        alto: elegido.alto,
+        tipo: elegido.tipo
+      });
+    }
+
+    function bucle() {
+      if (!jugando) return;
+
+      // 1. Distancia y aceleración
+      distancia += 1;
+      statDistancia.textContent = Math.floor(distancia / 6);
+      if (distancia % 400 === 0) {
+        velocidad = Math.min(velocidad + 0.45, 13);
+        if (typeof sonidos !== 'undefined') sonidos.bip();
+      }
+
+      // 2. Física del dinosaurio
+      dino.vy += dino.gravedad;
+      dino.y += dino.vy;
+      if (dino.y >= SUELO_Y - dino.alto) {
+        dino.y = SUELO_Y - dino.alto;
+        dino.vy = 0;
+        dino.enSuelo = true;
+      }
+
+      // 3. Generar obstáculos
+      tiempoHastaSiguienteObstaculo--;
+      if (tiempoHastaSiguienteObstaculo <= 0) {
+        generarObstaculo();
+        // Separación justa según velocidad
+        tiempoHastaSiguienteObstaculo = Math.floor(80 / (velocidad / 6)) + Math.floor(Math.random() * 45);
+      }
+
+      // 4. Mover obstáculos y comprobar colisión
+      for (let i = obstaculos.length - 1; i >= 0; i--) {
+        const obs = obstaculos[i];
+        obs.x -= velocidad;
+
+        // Comprobación de colisión AABB precisa
+        const hitboxPadding = 6;
+        if (
+          dino.x + hitboxPadding < obs.x + obs.ancho - hitboxPadding &&
+          dino.x + dino.ancho - hitboxPadding > obs.x + hitboxPadding &&
+          dino.y + hitboxPadding < obs.y + obs.alto - hitboxPadding &&
+          dino.y + dino.alto - hitboxPadding > obs.y + hitboxPadding
+        ) {
+          // ¡Colisión! Game Over
+          jugando = false;
+          const metrosFinales = Math.floor(distancia / 6);
+          if (metrosFinales > recordMetros) {
+            recordMetros = metrosFinales;
+            statRecord.textContent = recordMetros;
+          }
+
+          if (typeof sonidos !== 'undefined') sonidos.golpe();
+          transicion.mostrarGameOver({
+            puntos: `${metrosFinales} m`,
+            record: `${recordMetros} m`,
+            onReintentar: () => iniciarPartida(),
+            urlMenu: '../index.html'
+          });
+          return;
+        }
+
+        // Eliminar fuera de pantalla
+        if (obs.x + obs.ancho < -20) {
+          obstaculos.splice(i, 1);
+        }
+      }
+
+      // 5. Parallax fondo
+      estrellas.forEach(e => {
+        e.x -= e.speed * (velocidad / 6);
+        if (e.x < 0) e.x = W;
+      });
+
+      montanas.forEach(m => {
+        m.x -= (velocidad * 0.25);
+        if (m.x + m.ancho < 0) m.x = W;
+      });
+
+      // 6. Dibujar fotograma
+      dibujar();
+
+      if (jugando) {
+        loopId = requestAnimationFrame(bucle);
+      }
+    }
+
+    function dibujar() {
+      // Cielo oscuro
+      ctx.fillStyle = '#060613';
+      ctx.fillRect(0, 0, W, H);
+
+      // Estrellas neón
+      ctx.fillStyle = 'rgba(0, 240, 255, 0.7)';
+      estrellas.forEach(e => {
+        ctx.fillRect(e.x, e.y, e.size, e.size);
+      });
+
+      // Montañas de fondo (Parallax)
+      ctx.fillStyle = '#110c29';
+      montanas.forEach(m => {
+        ctx.beginPath();
+        ctx.moveTo(m.x, SUELO_Y);
+        ctx.lineTo(m.x + m.ancho / 2, SUELO_Y - m.alto);
+        ctx.lineTo(m.x + m.ancho, SUELO_Y);
+        ctx.fill();
+      });
+
+      // Suelo arcade pixelado
+      ctx.strokeStyle = '#39ff14';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(0, SUELO_Y);
+      ctx.lineTo(W, SUELO_Y);
+      ctx.stroke();
+
+      // Cuadrícula en el suelo
+      ctx.fillStyle = '#0a2106';
+      ctx.fillRect(0, SUELO_Y, W, H - SUELO_Y);
+      ctx.strokeStyle = 'rgba(57, 255, 20, 0.25)';
+      ctx.lineWidth = 2;
+      const offsetSuelo = (distancia * velocidad * 0.3) % 40;
+      for (let x = -offsetSuelo; x < W; x += 40) {
+        ctx.beginPath();
+        ctx.moveTo(x, SUELO_Y);
+        ctx.lineTo(x - 50, H);
+        ctx.stroke();
+      }
+
+      // Personaje Dino (Pixel art con canvas)
+      ctx.fillStyle = '#39ff14';
+      ctx.shadowColor = '#39ff14';
+      ctx.shadowBlur = 12;
+
+      // Cuerpo
+      ctx.fillRect(dino.x + 8, dino.y + 6, 26, 26);
+      // Cabeza
+      ctx.fillRect(dino.x + 20, dino.y, 22, 18);
+      // Ojo
+      ctx.fillStyle = '#000';
+      ctx.fillRect(dino.x + 32, dino.y + 4, 4, 4);
+      // Patas
+      ctx.fillStyle = '#39ff14';
+      const patada = Math.floor(distancia / 4) % 2 === 0;
+      if (dino.enSuelo) {
+        ctx.fillRect(dino.x + 10, dino.y + 32, 6, patada ? 14 : 10);
+        ctx.fillRect(dino.x + 24, dino.y + 32, 6, patada ? 10 : 14);
+      } else {
+        // En salto
+        ctx.fillRect(dino.x + 10, dino.y + 30, 8, 8);
+        ctx.fillRect(dino.x + 24, dino.y + 30, 8, 8);
+      }
+
+      ctx.shadowBlur = 0;
+
+      // Obstáculos (Dibujados con Canvas pixel art sin emojis)
+      obstaculos.forEach(obs => {
+        ctx.save();
+        if (obs.tipo === 'cactus_simple' || obs.tipo === 'cactus_doble') {
+          ctx.fillStyle = '#00f0ff';
+          ctx.shadowColor = '#00f0ff';
+          ctx.shadowBlur = 8;
+          // Tronco 1
+          ctx.fillRect(obs.x + 8, obs.y, 10, obs.alto);
+          // Brazos
+          ctx.fillRect(obs.x, obs.y + 14, 8, 6);
+          ctx.fillRect(obs.x, obs.y + 6, 6, 14);
+          ctx.fillRect(obs.x + 18, obs.y + 20, 8, 6);
+          ctx.fillRect(obs.x + 20, obs.y + 12, 6, 14);
+
+          if (obs.tipo === 'cactus_doble') {
+            // Tronco 2
+            ctx.fillRect(obs.x + 30, obs.y + 10, 8, obs.alto - 10);
+            ctx.fillRect(obs.x + 38, obs.y + 22, 8, 5);
+            ctx.fillRect(obs.x + 40, obs.y + 14, 6, 12);
+          }
+        } else if (obs.tipo === 'roca') {
+          // Roca pixelada magenta
+          ctx.fillStyle = '#ff007f';
+          ctx.shadowColor = '#ff007f';
+          ctx.shadowBlur = 8;
+          ctx.beginPath();
+          ctx.moveTo(obs.x + 6, obs.y + obs.alto);
+          ctx.lineTo(obs.x, obs.y + 14);
+          ctx.lineTo(obs.x + 12, obs.y);
+          ctx.lineTo(obs.x + obs.ancho - 8, obs.y + 4);
+          ctx.lineTo(obs.x + obs.ancho, obs.y + 16);
+          ctx.lineTo(obs.x + obs.ancho - 4, obs.y + obs.alto);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.fillStyle = '#ffe600';
+          ctx.fillRect(obs.x + 10, obs.y + 10, 8, 6);
+        } else if (obs.tipo === 'ave') {
+          // Ave / murciélago volador pixelado con aleteo
+          ctx.fillStyle = '#ffe600';
+          ctx.shadowColor = '#ffe600';
+          ctx.shadowBlur = 10;
+          const aleteo = Math.floor(distancia / 6) % 2 === 0;
+
+          // Cuerpo
+          ctx.fillRect(obs.x + 12, obs.y + 8, 14, 10);
+          // Ojo
+          ctx.fillStyle = '#000';
+          ctx.fillRect(obs.x + 10, obs.y + 10, 3, 3);
+          // Alas
+          ctx.fillStyle = '#ffe600';
+          if (aleteo) {
+            ctx.fillRect(obs.x + 2, obs.y, 14, 6);
+            ctx.fillRect(obs.x + 22, obs.y, 14, 6);
+          } else {
+            ctx.fillRect(obs.x + 2, obs.y + 14, 14, 6);
+            ctx.fillRect(obs.x + 22, obs.y + 14, 14, 6);
+          }
+        }
+        ctx.restore();
+      });
+    }
+
+    dibujar();
+  </script>
+</body>
+</html>
