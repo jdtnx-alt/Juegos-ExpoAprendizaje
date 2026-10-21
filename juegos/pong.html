@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -9,7 +9,7 @@
   <meta name="theme-color" content="#070714">
   <title>Pong Retro - Retro Arcade</title>
   <link rel="stylesheet" href="../css/estilos.css">
-  <link rel="stylesheet" href="../css/movil.css?v=2">
+  <link rel="stylesheet" href="../css/movil.css?v=3">
   <style>
     .pong-canvas-wrap {
       width: min(94vw, 720px);
@@ -111,41 +111,41 @@
     </div>
   </main>
 
-  <script src="../js/sonidos.js?v=2"></script>
+  <script src="../js/sonidos.js?v=3"></script>
   <script src="../js/transiciones.js"></script>
-  <script src="../js/movil.js?v=2"></script>
+  <script src="../js/movil.js?v=3"></script>
 
   <script>
     /* ==========================================================================
        CONSTANTES CONFIGURABLES DE BALANCE PONG (Dificultad, Velocidad, Errores)
        ========================================================================== */
     const BOLA_VELOCIDAD_INICIAL = {
-      facil: 4.8,   // Pelota un poco más rápida
+      facil: 5.0,
       medio: 5.8,
-      dificil: 7.0
+      dificil: 6.6
     };
 
     const BOLA_ACELERACION_REBOTE = {
-      facil: 0.14,  // Acelera un poco más en cada rebote
-      medio: 0.26,
-      dificil: 0.42
+      facil: 0.16,
+      medio: 0.22,
+      dificil: 0.30
     };
 
     const AJUSTES_DIF = {
       facil: {
-        cpuSpeed: 2.7,      // ~35% más de velocidad (antes 2.0)
-        error: 48,          // Margen de error reducido (antes 85)
-        retrasoFrames: 3    // Retraso de reacción reducido (antes 6)
+        cpuSpeed: 3.6,      // Mantiene peloteos divertidos sin regalar todos los puntos
+        error: 26,          // Margen de error humano moderado
+        retrasoFrames: 2
       },
       medio: {
-        cpuSpeed: 4.2,
-        error: 22,
+        cpuSpeed: 4.4,      // Equilibrado
+        error: 18,
         retrasoFrames: 1
       },
       dificil: {
-        cpuSpeed: 5.8,
-        error: 6,
-        retrasoFrames: 0
+        cpuSpeed: 5.3,      // Desafiante pero ganable con tiros con ángulo o velocidad
+        error: 14,          // Permite al jugador meter goles con habilidad
+        retrasoFrames: 1
       }
     };
 
@@ -281,18 +281,18 @@
         p1.y = Math.min(H - paletaAlto, p1.y + 7);
       }
 
-      // 2. IA de la Computadora (Con retraso y margen de error)
+      // 2. IA de la Computadora (Con reacción humana y margen de error)
       iaFrameContador++;
       const confIa = AJUSTES_DIF[dificultad];
       if (iaFrameContador >= (confIa.retrasoFrames || 1)) {
         iaFrameContador = 0;
-        const debeSeguir = dificultad === 'dificil' || bola.vx > 0 || bola.x > W * 0.35;
+        const debeSeguir = bola.vx > 0 || (dificultad === 'dificil' ? bola.x > W * 0.3 : bola.x > W * 0.45);
         if (debeSeguir) {
-          const oscilacion = Math.sin(Date.now() / 260) * cpu.errorMargin;
+          const oscilacion = Math.sin(Date.now() / 240) * (cpu.errorMargin || 0);
           const targetY = bola.y - paletaAlto / 2 + oscilacion;
-          if (cpu.y < targetY - 6) {
+          if (cpu.y < targetY - 5) {
             cpu.y += cpu.speed;
-          } else if (cpu.y > targetY + 6) {
+          } else if (cpu.y > targetY + 5) {
             cpu.y -= cpu.speed;
           }
         }

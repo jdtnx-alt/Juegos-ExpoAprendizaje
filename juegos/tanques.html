@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -9,7 +9,7 @@
   <meta name="theme-color" content="#070714">
   <title>Duelo de Tanques 2P - Retro Arcade</title>
   <link rel="stylesheet" href="../css/estilos.css">
-  <link rel="stylesheet" href="../css/movil.css?v=2">
+  <link rel="stylesheet" href="../css/movil.css?v=3">
   <style>
     .tanks-canvas-wrap {
       width: min(96vw, 840px);
@@ -112,9 +112,9 @@
     </div>
   </main>
 
-  <script src="../js/sonidos.js?v=2"></script>
+  <script src="../js/sonidos.js?v=3"></script>
   <script src="../js/transiciones.js"></script>
-  <script src="../js/movil.js?v=2"></script>
+  <script src="../js/movil.js?v=3"></script>
 
   <script>
     /* ==========================================================================
@@ -197,9 +197,10 @@
       teclas[e.code] = false;
     });
 
-    // Joysticks y botones virtuales para móvil (solo en pantallas táctiles reales)
+    // Joysticks virtuales para móvil (solo en pantallas táctiles reales)
     let joyVecJ1 = { x: 0, y: 0 };
     let joyVecJ2 = { x: 0, y: 0 };
+    const INTERVALO_AUTO_DISPARO_MS = 1500; // Auto-disparo cada 1.5 segundos en móvil
 
     const esTactilTanques = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
     if (typeof RetroMovil !== 'undefined' && esTactilTanques) {
@@ -211,22 +212,16 @@
         onMove: (v) => { joyVecJ1 = v; }
       });
 
-      new RetroMovil.TouchActionButton('#btn-fire-j1-container', {
-        texto: 'FIRE',
-        color: '#00f0ff',
-        onPress: () => { if (jugando) dispararBala(t1); }
-      });
-
       new RetroMovil.VirtualJoystick('#joystick-j2-container', {
         color: '#ff007f',
         onMove: (v) => { joyVecJ2 = v; }
       });
 
-      new RetroMovil.TouchActionButton('#btn-fire-j2-container', {
-        texto: 'FIRE',
-        color: '#ff007f',
-        onPress: () => { if (jugando) dispararBala(t2); }
-      });
+      // En móvil se quita el botón de disparar; los tanques disparan automáticamente
+      const fire1El = document.getElementById('btn-fire-j1-container');
+      const fire2El = document.getElementById('btn-fire-j2-container');
+      if (fire1El) fire1El.style.display = 'none';
+      if (fire2El) fire2El.style.display = 'none';
     }
 
     btnBackMenu.addEventListener('click', () => {
@@ -251,6 +246,7 @@
       t1.vidas = VIDAS_INICIALES;
       t1.balas = [];
       t1.invulnerable = 0;
+      t1.ultimoAutoDisparo = performance.now();
 
       t2.x = W - 80;
       t2.y = H / 2;
@@ -258,6 +254,7 @@
       t2.vidas = VIDAS_INICIALES;
       t2.balas = [];
       t2.invulnerable = 0;
+      t2.ultimoAutoDisparo = performance.now();
 
       actualizarVidasUI();
 
@@ -372,6 +369,19 @@
 
       if (teclas['Enter']) {
         dispararBala(t2);
+      }
+
+      // Auto-disparo cada 1.5 segundos exclusivamente en móvil
+      if (esTactilTanques) {
+        const ahora = performance.now();
+        if (ahora - (t1.ultimoAutoDisparo || 0) >= INTERVALO_AUTO_DISPARO_MS) {
+          dispararBala(t1);
+          t1.ultimoAutoDisparo = ahora;
+        }
+        if (ahora - (t2.ultimoAutoDisparo || 0) >= INTERVALO_AUTO_DISPARO_MS) {
+          dispararBala(t2);
+          t2.ultimoAutoDisparo = ahora;
+        }
       }
 
       // Reducir invulnerabilidad

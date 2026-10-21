@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -9,7 +9,7 @@
   <meta name="theme-color" content="#070714">
   <title>Air Hockey 2P - Retro Arcade</title>
   <link rel="stylesheet" href="../css/estilos.css">
-  <link rel="stylesheet" href="../css/movil.css?v=2">
+  <link rel="stylesheet" href="../css/movil.css?v=3">
   <style>
     .hockey-canvas-wrap {
       width: min(96vw, 840px);
@@ -102,9 +102,9 @@
     </div>
   </main>
 
-  <script src="../js/sonidos.js?v=2"></script>
+  <script src="../js/sonidos.js?v=3"></script>
   <script src="../js/transiciones.js"></script>
-  <script src="../js/movil.js?v=2"></script>
+  <script src="../js/movil.js?v=3"></script>
 
   <script>
     /* ==========================================================================
@@ -112,8 +112,8 @@
        ========================================================================== */
     const GOLES_PARA_GANAR = 7;
     const VELOCIDAD_PALA = 4.2;
-    const FRICCION_DISCO = 0.993;
-    const VELOCIDAD_MAX_DISCO = 10;
+    const FRICCION_DISCO = 0.995;
+    const VELOCIDAD_MAX_DISCO = 16;
     const RADIO_PALA = 28;
     const RADIO_DISCO = 16;
     const ANCHO_PORTERIA = 140;
@@ -194,12 +194,20 @@
 
           if (tx < MITAD_X) {
             // Lado Jugador 1
-            p1.x = Math.max(p1.radio, Math.min(MITAD_X - p1.radio, tx));
-            p1.y = Math.max(p1.radio, Math.min(H - p1.radio, ty));
+            const nuevoX = Math.max(p1.radio, Math.min(MITAD_X - p1.radio - 4, tx));
+            const nuevoY = Math.max(p1.radio, Math.min(H - p1.radio, ty));
+            p1.vx = (nuevoX - p1.x) * 1.2;
+            p1.vy = (nuevoY - p1.y) * 1.2;
+            p1.x = nuevoX;
+            p1.y = nuevoY;
           } else {
             // Lado Jugador 2
-            p2.x = Math.max(MITAD_X + p2.radio, Math.min(W - p2.radio, tx));
-            p2.y = Math.max(p2.radio, Math.min(H - p2.radio, ty));
+            const nuevoX = Math.max(MITAD_X + p2.radio + 4, Math.min(W - p2.radio, tx));
+            const nuevoY = Math.max(p2.radio, Math.min(H - p2.radio, ty));
+            p2.vx = (nuevoX - p2.x) * 1.2;
+            p2.vy = (nuevoY - p2.y) * 1.2;
+            p2.x = nuevoX;
+            p2.y = nuevoY;
           }
         }
       }
@@ -257,26 +265,40 @@
         const ny = dy / (dist || 1);
 
         // Separar objetos para evitar atasco
-        const overlap = radioTotal - dist;
+        const overlap = radioTotal - dist + 2;
         disco.x += nx * overlap;
         disco.y += ny * overlap;
 
-        // Rebote elástico con impulso
-        const velocidadRelX = disco.vx - pala.vx;
-        const velocidadRelY = disco.vy - pala.vy;
+        // Velocidad relativa
+        const pVx = pala.vx || 0;
+        const pVy = pala.vy || 0;
+        const velocidadRelX = disco.vx - pVx;
+        const velocidadRelY = disco.vy - pVy;
         const productoPunto = velocidadRelX * nx + velocidadRelY * ny;
 
         if (productoPunto < 0) {
-          const impulso = -1.6 * productoPunto;
-          disco.vx += nx * impulso + pala.vx * 0.4;
-          disco.vy += ny * impulso + pala.vy * 0.4;
+          const impulso = -1.7 * productoPunto;
+          disco.vx += nx * impulso;
+          disco.vy += ny * impulso;
+        }
 
-          // Limitar velocidad máxima
-          const mag = Math.hypot(disco.vx, disco.vy);
-          if (mag > VELOCIDAD_MAX_DISCO) {
-            disco.vx = (disco.vx / mag) * VELOCIDAD_MAX_DISCO;
-            disco.vy = (disco.vy / mag) * VELOCIDAD_MAX_DISCO;
-          }
+        // DISPARO / EMPUJE: transmitir la fuerza del movimiento de la pala
+        const empujePala = pVx * nx + pVy * ny;
+        if (empujePala > 0) {
+          disco.vx += nx * (empujePala * 1.6 + 4.0);
+          disco.vy += ny * (empujePala * 1.6 + 4.0);
+        } else {
+          // Impulso mínimo para evitar que se quede pegado si la pala no se mueve
+          disco.vx += nx * 3.5;
+          disco.vy += ny * 3.5;
+        }
+
+        // Limitar velocidad máxima
+        const mag = Math.hypot(disco.vx, disco.vy);
+        const VEL_MAX = 16;
+        if (mag > VEL_MAX) {
+          disco.vx = (disco.vx / mag) * VEL_MAX;
+          disco.vy = (disco.vy / mag) * VEL_MAX;
         }
       }
     }
@@ -291,10 +313,15 @@
       if (teclas['KeyA']) dx1 -= VELOCIDAD_PALA;
       if (teclas['KeyD']) dx1 += VELOCIDAD_PALA;
 
-      p1.vx = dx1;
-      p1.vy = dy1;
-      p1.x = Math.max(p1.radio, Math.min(MITAD_X - p1.radio - 4, p1.x + p1.vx));
-      p1.y = Math.max(p1.radio, Math.min(H - p1.radio, p1.y + p1.vy));
+      if (dx1 !== 0 || dy1 !== 0) {
+        p1.vx = dx1;
+        p1.vy = dy1;
+        p1.x = Math.max(p1.radio, Math.min(MITAD_X - p1.radio - 4, p1.x + p1.vx));
+        p1.y = Math.max(p1.radio, Math.min(H - p1.radio, p1.y + p1.vy));
+      } else {
+        p1.vx = (p1.vx || 0) * 0.85;
+        p1.vy = (p1.vy || 0) * 0.85;
+      }
 
       // 2. Movimiento Jugador 2 (Flechas) - Bloqueado a su mitad
       let dx2 = 0, dy2 = 0;
@@ -303,10 +330,15 @@
       if (teclas['ArrowLeft']) dx2 -= VELOCIDAD_PALA;
       if (teclas['ArrowRight']) dx2 += VELOCIDAD_PALA;
 
-      p2.vx = dx2;
-      p2.vy = dy2;
-      p2.x = Math.max(MITAD_X + p2.radio + 4, Math.min(W - p2.radio, p2.x + p2.vx));
-      p2.y = Math.max(p2.radio, Math.min(H - p2.radio, p2.y + p2.vy));
+      if (dx2 !== 0 || dy2 !== 0) {
+        p2.vx = dx2;
+        p2.vy = dy2;
+        p2.x = Math.max(MITAD_X + p2.radio + 4, Math.min(W - p2.radio, p2.x + p2.vx));
+        p2.y = Math.max(p2.radio, Math.min(H - p2.radio, p2.y + p2.vy));
+      } else {
+        p2.vx = (p2.vx || 0) * 0.85;
+        p2.vy = (p2.vy || 0) * 0.85;
+      }
 
       // 3. Fricción y movimiento del disco
       disco.vx *= FRICCION_DISCO;
