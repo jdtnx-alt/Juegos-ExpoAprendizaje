@@ -6,20 +6,55 @@
 class ArcadeAudio {
   constructor() {
     this.ctx = null;
-    // Leer preferencia de silencio de localStorage para compartirla entre juegos
+    this.masterGain = null;
+    this.iosUnlocked = false;
+
+    // Leer preferencia de silencio de localStorage (por defecto activo, no silenciado)
     const savedMute = localStorage.getItem('arcade_mute');
     this.silenciado = savedMute === 'true';
+
+    // Vincular métodos
+    this.desbloquear = this.desbloquear.bind(this);
   }
 
   init() {
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (AudioCtx) {
-        this.ctx = new AudioCtx();
+        try {
+          this.ctx = new AudioCtx();
+          this.masterGain = this.ctx.createGain();
+          this.masterGain.gain.setValueAtTime(this.silenciado ? 0 : 1, this.ctx.currentTime);
+          this.masterGain.connect(this.ctx.destination);
+        } catch (_) {}
       }
     }
+
     if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      this.ctx.resume().catch(() => {});
+    }
+
+    this.reproducirBufferSilencioIOS();
+  }
+
+  // Reproduce un buffer vacío microscópico para desbloquear la Web Audio API en Safari / iOS
+  reproducirBufferSilencioIOS() {
+    if (!this.ctx || this.iosUnlocked) return;
+    try {
+      const buffer = this.ctx.createBuffer(1, 1, 22050);
+      const source = this.ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(this.ctx.destination);
+      source.start(0);
+      this.iosUnlocked = true;
+    } catch (_) {}
+  }
+
+  // Desbloqueo pasivo tras cualquier interacción del usuario
+  desbloquear() {
+    this.init();
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
     }
   }
 
@@ -27,6 +62,13 @@ class ArcadeAudio {
   toggleSilencio() {
     this.silenciado = !this.silenciado;
     localStorage.setItem('arcade_mute', this.silenciado);
+
+    if (this.masterGain && this.ctx) {
+      try {
+        this.masterGain.gain.setValueAtTime(this.silenciado ? 0 : 1, this.ctx.currentTime);
+      } catch (_) {}
+    }
+
     this.actualizarBotonSilencio();
     if (!this.silenciado) {
       this.bip();
@@ -35,21 +77,22 @@ class ArcadeAudio {
   }
 
   actualizarBotonSilencio() {
-    const btn = document.getElementById('btn-toggle-sonido');
-    if (btn) {
+    const botones = document.querySelectorAll('#btn-toggle-sonido, .btn-sonido-arcade');
+    botones.forEach(btn => {
       btn.innerHTML = this.silenciado
         ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>'
         : '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>';
       btn.title = this.silenciado ? 'ACTIVAR SONIDO' : 'SILENCIAR SONIDO';
+      btn.setAttribute('aria-label', this.silenciado ? 'Activar sonido' : 'Silenciar sonido');
       btn.classList.toggle('silenciado', this.silenciado);
-    }
+    });
   }
 
-  // Tono 8-bit general
+  // Tono 8-bit general conectado al masterGain
   _tone(freq, type = 'square', duration = 0.1, volume = 0.25, freqEnd = null) {
     if (this.silenciado) return;
     this.init();
-    if (!this.ctx) return;
+    if (!this.ctx || !this.masterGain) return;
 
     try {
       const osc = this.ctx.createOscillator();
@@ -66,11 +109,11 @@ class ArcadeAudio {
       gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
 
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(this.masterGain);
       osc.start(t);
       osc.stop(t + duration);
-    } catch (e) {
-      // AudioContext bloqueado temporalmente
+    } catch (_) {
+      // AudioContext bloqueado temporalmente por política del navegador
     }
   }
 
@@ -154,13 +197,38 @@ class ArcadeAudio {
 // Instancia global compartida
 const sonidos = new ArcadeAudio();
 
-// Auto-conectar botón de sonido si existe al cargar el DOM
+// Desbloquear audio en el primer gesto del usuario en la página
+const gestosDesbloqueo = ['pointerdown', 'touchend', 'click', 'keydown'];
+function activarAudioEnGesto() {
+  sonidos.desbloquear();
+  if (sonidos.ctx && sonidos.ctx.state === 'running') {
+    gestosDesbloqueo.forEach(evt => window.removeEventListener(evt, activarAudioEnGesto));
+  }
+}
+gestosDesbloqueo.forEach(evt => {
+  window.addEventListener(evt, activarAudioEnGesto, { passive: true });
+});
+
+// Reanudar audio al volver a la pestaña o al cambiar orientación
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && sonidos.ctx && sonidos.ctx.state === 'suspended') {
+    sonidos.ctx.resume().catch(() => {});
+  }
+});
+window.addEventListener('orientationchange', () => {
+  if (sonidos.ctx && sonidos.ctx.state === 'suspended') {
+    sonidos.ctx.resume().catch(() => {});
+  }
+});
+
+// Auto-conectar botón de sonido al cargar el DOM
 document.addEventListener('DOMContentLoaded', () => {
   sonidos.actualizarBotonSilencio();
-  const btn = document.getElementById('btn-toggle-sonido');
-  if (btn) {
-    btn.addEventListener('click', () => {
+  const botones = document.querySelectorAll('#btn-toggle-sonido, .btn-sonido-arcade');
+  botones.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
       sonidos.toggleSilencio();
     });
-  }
+  });
 });

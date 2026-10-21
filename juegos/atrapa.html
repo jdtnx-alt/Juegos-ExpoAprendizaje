@@ -1,8 +1,12 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#070714">
   <title>Atrapa Objetos - Retro Arcade</title>
   <link rel="stylesheet" href="../css/estilos.css">
   <link rel="stylesheet" href="../css/movil.css">
@@ -103,14 +107,17 @@
     /* ==========================================================================
        CONSTANTES CONFIGURABLES DE EQUILIBRIO DE JUEGO (ATRAPA OBJETOS)
        ========================================================================== */
-    const VELOCIDAD_CAIDA_INICIAL = 1.8;       // Menos de la mitad de la velocidad original (4.2)
-    const VELOCIDAD_CAIDA_MAXIMA = 5.2;        // Límite máximo para que siempre se pueda jugar
-    const PUNTOS_POR_AUMENTO_VELOCIDAD = 50;   // Aumento gradual cada 50 puntos
-    const INCREMENTO_VELOCIDAD = 0.20;         // Cantidad suave que sube la velocidad
-    const INTERVALO_APARICION_INICIAL = 68;    // Frames entre objetos al inicio (frecuencia reducida)
-    const INTERVALO_APARICION_MINIMO = 36;     // Frecuencia máxima a puntajes altos
+    const VELOCIDAD_CAIDA_INICIAL = 1.8;       // Velocidad baja inicial para inicio suave
+    const VELOCIDAD_CAIDA_MAXIMA = 5.4;        // Límite máximo para que siempre sea jugable
+    const INCREMENTO_VELOCIDAD = 0.18;         // Cantidad suave que sube la velocidad por intervalo
+    const INTERVALO_TIEMPO_ACEL_MS = 10000;    // Intervalo de aumento por tiempo: cada 10 segundos
+    const PUNTOS_POR_AUMENTO_VELOCIDAD = 50;   // Intervalo de aumento por puntaje: cada 50 puntos
+    const INTERVALO_APARICION_INICIAL = 68;    // Frames entre objetos al inicio (frecuencia relajada)
+    const INTERVALO_APARICION_MINIMO = 34;     // Frecuencia máxima a puntajes o tiempos altos
     const PROBABILIDAD_BOMBA = 0.26;           // 26% de probabilidad de bomba
     const VIDAS_INICIALES = 3;                 // Vidas del jugador
+
+    let tiempoInicioPartida = 0;
 
     /* ==========================================================================
        LÓGICA DEL JUEGO CON GRÁFICOS PIXEL/CANVAS PUROS
@@ -145,9 +152,9 @@
     };
 
     function ajustarDimensionesAtrapa() {
-      const esMovil = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+      const esMovil = window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 900px)').matches;
       const wrap = document.querySelector('.atrapa-canvas-wrap');
-      if (esMovil && wrap && window.innerHeight > window.innerWidth) {
+      if (esMovil && wrap) {
         const wReal = Math.floor(wrap.clientWidth);
         const hReal = Math.floor(wrap.clientHeight);
         if (wReal > 50 && hReal > 50) {
@@ -167,6 +174,9 @@
       canasta.y = H - 55;
       canasta.x = Math.max(0, Math.min(W - canasta.ancho, canasta.x));
     }
+
+    window.addEventListener('resize', ajustarDimensionesAtrapa);
+    window.addEventListener('orientationchange', ajustarDimensionesAtrapa);
 
     // Objetos que caen
     let objetos = [];
@@ -188,6 +198,7 @@
 
     function iniciarPartida() {
       ajustarDimensionesAtrapa();
+      tiempoInicioPartida = Date.now();
       puntos = 0;
       vidas = VIDAS_INICIALES;
       velocidadCaida = VELOCIDAD_CAIDA_INICIAL;
@@ -291,6 +302,11 @@
     function bucle() {
       if (!jugando) return;
 
+      // Aceleración gradual combinada: con el tiempo transcurrido (cada 10s) y con los puntos (cada 50 pts)
+      const pasosTiempo = Math.floor((Date.now() - tiempoInicioPartida) / INTERVALO_TIEMPO_ACEL_MS);
+      const pasosPuntos = Math.floor(puntos / PUNTOS_POR_AUMENTO_VELOCIDAD);
+      velocidadCaida = Math.min(VELOCIDAD_CAIDA_MAXIMA, VELOCIDAD_CAIDA_INICIAL + (pasosTiempo + pasosPuntos) * INCREMENTO_VELOCIDAD);
+
       // Movimiento con teclas
       if (teclas['ArrowLeft'] || teclas['KeyA']) {
         canasta.x = Math.max(0, canasta.x - canasta.speed);
@@ -299,11 +315,11 @@
         canasta.x = Math.min(W - canasta.ancho, canasta.x + canasta.speed);
       }
 
-      // Frecuencia dinámica de aparición
+      // Frecuencia dinámica de aparición con límite seguro
       tiempoParaProximoObjeto--;
       if (tiempoParaProximoObjeto <= 0) {
         generarObjeto();
-        const reduccion = Math.floor(puntos / 40);
+        const reduccion = Math.min(INTERVALO_APARICION_INICIAL - INTERVALO_APARICION_MINIMO, Math.floor(pasosTiempo * 2 + pasosPuntos * 3));
         tiempoParaProximoObjeto = Math.max(INTERVALO_APARICION_MINIMO, INTERVALO_APARICION_INICIAL - reduccion);
       }
 
@@ -336,11 +352,6 @@
             statPuntos.textContent = puntos;
             crearParticulas(obj.x + obj.radio, obj.y + obj.radio, '#ffe600');
             if (typeof sonidos !== 'undefined') sonidos.punto();
-
-            // Aumento de velocidad suave cada 50 puntos
-            if (puntos % PUNTOS_POR_AUMENTO_VELOCIDAD === 0) {
-              velocidadCaida = Math.min(VELOCIDAD_CAIDA_MAXIMA, velocidadCaida + INCREMENTO_VELOCIDAD);
-            }
           }
 
           objetos.splice(i, 1);

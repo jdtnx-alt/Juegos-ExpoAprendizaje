@@ -250,42 +250,180 @@
   }
 
   // ==========================================================================
-  // 4. PREVENCIÓN GLOBAL DE FALLOS TÁCTILES
+  // 4. PREVENCIÓN GLOBAL DE FALLOS TÁCTILES SIN BLOQUEAR OVERLAYS
   // ==========================================================================
   function sanitizarEventosTactiles() {
     if (!window.matchMedia('(hover: none) and (pointer: coarse)').matches) {
       return;
     }
 
-    // Evitar zoom por doble toque accidental en iOS y Chrome móvil
+    // Evitar zoom por doble toque en áreas de juego, pero NUNCA en modales, botones o textos desplazables
     let ultimoToque = 0;
     document.addEventListener('touchend', (e) => {
       const ahora = Date.now();
       if (ahora - ultimoToque <= 300) {
-        // Doble toque detectado
-        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+        // Si el usuario toca un botón, enlace o pantalla superpuesta desplazable, permitir su flujo natural
+        const esInteractuable = e.target.closest('button, a, input, textarea, .game-start-overlay, .arcade-modal, .overlay, .arcade-rotate-prompt, .selection-container');
+        if (!esInteractuable) {
           e.preventDefault();
         }
       }
       ultimoToque = ahora;
     }, { passive: false });
 
-    // Prevenir menú contextual táctil en áreas de juego
+    // Prevenir menú contextual solo en canvas de juego
     window.addEventListener('contextmenu', (e) => {
-      if (e.pointerType === 'touch' || 'ontouchstart' in window) {
+      if (e.target.tagName === 'CANVAS') {
         e.preventDefault();
       }
     });
   }
 
-  // Inicializar al cargar
-  sanitizarEventosTactiles();
+  // ==========================================================================
+  // 5. GESTOR DE PANTALLA COMPLETA ROBUSTO (MULTINAVEGADOR Y PERSISTENTE)
+  // ==========================================================================
+  const FullscreenManager = {
+    esSoportado() {
+      const doc = document.documentElement;
+      return !!(doc.requestFullscreen || doc.webkitRequestFullscreen || doc.msRequestFullscreen);
+    },
+
+    estaEnPantallaCompleta() {
+      return !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+    },
+
+    solicitar() {
+      const doc = document.documentElement;
+      const fn = doc.requestFullscreen || doc.webkitRequestFullscreen || doc.msRequestFullscreen;
+      if (fn) {
+        sessionStorage.setItem('arcade_fullscreen', 'true');
+        return fn.call(doc).then(() => {
+          this.intentarBloqueoOrientacion();
+        }).catch(() => {});
+      }
+      return Promise.resolve();
+    },
+
+    salir() {
+      sessionStorage.setItem('arcade_fullscreen', 'false');
+      const fn = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+      if (fn && this.estaEnPantallaCompleta()) {
+        return fn.call(document).catch(() => {});
+      }
+      return Promise.resolve();
+    },
+
+    toggle() {
+      if (this.estaEnPantallaCompleta()) {
+        return this.salir();
+      } else {
+        return this.solicitar();
+      }
+    },
+
+    intentarBloqueoOrientacion() {
+      try {
+        if (screen.orientation && screen.orientation.lock) {
+          const path = window.location.pathname.toLowerCase();
+          if (path.includes('airhockey') || path.includes('tanques') || path.includes('sumo')) {
+            screen.orientation.lock('landscape').catch(() => {});
+          } else if (path.includes('autos') || path.includes('clics')) {
+            screen.orientation.lock('portrait').catch(() => {});
+          }
+        }
+      } catch (_) {}
+    },
+
+    actualizarBoton(btn) {
+      if (!btn) return;
+      if (!this.esSoportado()) {
+        // En navegadores que no soportan Fullscreen en páginas (como Safari iPhone), ocultar el botón
+        btn.style.display = 'none';
+        return;
+      }
+      const activo = this.estaEnPantallaCompleta();
+      btn.title = activo ? 'Salir de Pantalla Completa' : 'Pantalla Completa';
+      btn.setAttribute('aria-label', activo ? 'Salir de pantalla completa' : 'Pantalla completa');
+      btn.classList.toggle('activo', activo);
+    },
+
+    inicializar() {
+      const btn = document.getElementById('btn-toggle-fullscreen');
+      if (btn) {
+        this.actualizarBoton(btn);
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (typeof sonidos !== 'undefined') sonidos.click();
+          this.toggle();
+        });
+      }
+
+      const eventosCambio = ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'];
+      eventosCambio.forEach(evt => {
+        document.addEventListener(evt, () => {
+          this.actualizarBoton(document.getElementById('btn-toggle-fullscreen'));
+        });
+      });
+
+      // Si el usuario activó pantalla completa anteriormente en la sesión, reingresar en el primer toque
+      if (sessionStorage.getItem('arcade_fullscreen') === 'true') {
+        const reentrarEnGesto = () => {
+          if (!FullscreenManager.estaEnPantallaCompleta()) {
+            FullscreenManager.solicitar();
+          }
+          ['pointerdown', 'touchend', 'click'].forEach(e => window.removeEventListener(e, reentrarEnGesto));
+        };
+        ['pointerdown', 'touchend', 'click'].forEach(e => window.addEventListener(e, reentrarEnGesto, { passive: true }));
+      }
+    }
+  };
+
+  // ==========================================================================
+  // 6. INTEGRACIÓN Y POSICIONAMIENTO DEL BOTÓN DE SILENCIO EN MÓVIL
+  // ==========================================================================
+  function recolocarBotonSonidoEnMovil() {
+    const esMovil = window.matchMedia('(hover: none) and (pointer: coarse), (max-width: 900px)').matches;
+    if (!esMovil) return;
+
+    const btnSonido = document.getElementById('btn-toggle-sonido');
+    if (!btnSonido) return;
+
+    // Caso 1: Carrera de autos frente a frente (mitad dividida)
+    const divisorCentral = document.querySelector('.center-split-divider');
+    if (divisorCentral && !divisorCentral.contains(btnSonido)) {
+      btnSonido.classList.add('btn-sonido-arcade');
+      btnSonido.style.position = 'static';
+      divisorCentral.appendChild(btnSonido);
+      return;
+    }
+
+    // Caso 2: Todos los juegos estándar con barra superior .game-top-bar
+    const topBar = document.querySelector('.game-top-bar');
+    if (topBar && !topBar.contains(btnSonido)) {
+      btnSonido.classList.add('btn-sonido-arcade');
+      btnSonido.style.position = 'static';
+      topBar.appendChild(btnSonido);
+    }
+  }
+
+  // Inicializar al cargar el DOM y al redimensionar
+  document.addEventListener('DOMContentLoaded', () => {
+    sanitizarEventosTactiles();
+    FullscreenManager.inicializar();
+    recolocarBotonSonidoEnMovil();
+  });
+
+  window.addEventListener('resize', recolocarBotonSonidoEnMovil);
+  window.addEventListener('orientationchange', recolocarBotonSonidoEnMovil);
 
   // Exportar al ámbito global para uso modular
   window.RetroMovil = {
     OrientationGuard: OrientationGuard,
     VirtualJoystick: VirtualJoystick,
     TouchActionButton: TouchActionButton,
+    FullscreenManager: FullscreenManager,
+    recolocarBotonSonido: recolocarBotonSonidoEnMovil,
     esTactil: () => window.matchMedia('(hover: none) and (pointer: coarse)').matches
   };
 

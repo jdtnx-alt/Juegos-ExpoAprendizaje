@@ -1,8 +1,12 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#070714">
   <title>Carrera de Autos 2P - Retro Arcade</title>
   <link rel="stylesheet" href="../css/estilos.css">
   <link rel="stylesheet" href="../css/movil.css">
@@ -196,14 +200,18 @@
 
   <script>
     /* ==========================================================================
-       CONSTANTES CONFIGURABLES DE LA CARRERA DE AUTOS
+       CONSTANTES CONFIGURABLES DE LA CARRERA DE AUTOS (VELOCIDAD Y EQUILIBRIO)
        ========================================================================== */
+    const VELOCIDAD_INICIAL = 2.8;            // Velocidad base al iniciar la carrera
+    const VELOCIDAD_MAXIMA = 6.2;             // Límite máximo para permitir siempre esquivar
+    const INCREMENTO_VELOCIDAD = 0.16;        // Incremento gradual por intervalo
+    const INTERVALO_INCREMENTO_MS = 5000;     // Cada 5 segundos transcurridos
+    const FRECUENCIA_OBSTACULO_BASE = 135;    // Frames base de separación entre obstáculos
     const MAX_CHOQUES = 3;                    // 3 choques = eliminación del jugador
     const DISTANCIA_META = 1000;              // Metros meta
-    const VELOCIDAD_BASE = 2.8;               // Velocidad inicial de la pista
-    const VELOCIDAD_MAXIMA = 6.8;             // Velocidad máxima permitida
-    const FRECUENCIA_OBSTACULO = 130;         // Frames entre obstáculos generados
     const DURACION_CHOQUE_FRAMES = 55;        // Frames de frenado e invencibilidad tras choque
+
+    let tiempoInicioPartida = 0;
 
     const canvas = document.getElementById('racing-canvas');
     const ctx = canvas.getContext('2d');
@@ -389,15 +397,17 @@
       obstaculosJ1 = [];
       obstaculosJ2 = [];
 
+      tiempoInicioPartida = Date.now();
+
       j1.carril = 1;
       j1.distancia = 0;
-      j1.velocidad = VELOCIDAD_BASE;
+      j1.velocidad = VELOCIDAD_INICIAL;
       j1.choqueTimer = 0;
       j1.choques = 0;
 
       j2.carril = 1;
       j2.distancia = 0;
-      j2.velocidad = VELOCIDAD_BASE;
+      j2.velocidad = VELOCIDAD_INICIAL;
       j2.choqueTimer = 0;
       j2.choques = 0;
 
@@ -460,22 +470,23 @@
       framesContadorJ1++;
       framesContadorJ2++;
 
-      // 1. Aceleración gradual idéntica
-      const factorAcel1 = Math.min(VELOCIDAD_MAXIMA, VELOCIDAD_BASE + (j1.distancia / 320));
-      const factorAcel2 = Math.min(VELOCIDAD_MAXIMA, VELOCIDAD_BASE + (j2.distancia / 320));
+      // 1. Aceleración progresiva basada en el tiempo de partida (exactamente igual y justa para ambos)
+      const msTranscurridos = Date.now() - tiempoInicioPartida;
+      const intervalosPasados = Math.floor(msTranscurridos / INTERVALO_INCREMENTO_MS);
+      const velocidadCrucero = Math.min(VELOCIDAD_MAXIMA, VELOCIDAD_INICIAL + (intervalosPasados * INCREMENTO_VELOCIDAD));
 
       if (j1.choqueTimer > 0) {
         j1.choqueTimer--;
-        j1.velocidad = VELOCIDAD_BASE * 0.4;
+        j1.velocidad = VELOCIDAD_INICIAL * 0.45;
       } else {
-        j1.velocidad = factorAcel1;
+        j1.velocidad = velocidadCrucero;
       }
 
       if (j2.choqueTimer > 0) {
         j2.choqueTimer--;
-        j2.velocidad = VELOCIDAD_BASE * 0.4;
+        j2.velocidad = VELOCIDAD_INICIAL * 0.45;
       } else {
-        j2.velocidad = factorAcel2;
+        j2.velocidad = velocidadCrucero;
       }
 
       // 2. Incrementar distancias
@@ -483,11 +494,12 @@
       j2.distancia += j2.velocidad * 0.08;
       actualizarMarcadoresUI();
 
-      // 3. Generar obstáculos independientes con su propio ritmo
-      if (framesContadorJ1 % FRECUENCIA_OBSTACULO === 0) {
+      // 3. Frecuencia adaptativa de obstáculos: a mayor velocidad, mayor separación en frames para que la distancia física entre obstáculos siempre permita esquivar
+      const frecuenciaActual = Math.max(82, Math.round(FRECUENCIA_OBSTACULO_BASE * (VELOCIDAD_INICIAL / velocidadCrucero)));
+      if (framesContadorJ1 % frecuenciaActual === 0) {
         generarObstaculoJ1();
       }
-      if (framesContadorJ2 % FRECUENCIA_OBSTACULO === 0) {
+      if (framesContadorJ2 % frecuenciaActual === 0) {
         generarObstaculoJ2();
       }
 
